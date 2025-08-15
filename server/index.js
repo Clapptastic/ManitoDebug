@@ -1,6 +1,6 @@
-// Minimal illustrative server index (for packaging demonstration)
-// NOTE: This is not the full production server; see docs for the full API spec.
-import express from 'express';
-const app = express();
-app.get('/api/health', (req,res)=> res.json({ok:true, msg:'manito-package demo'}));
-app.listen(3000, ()=> console.log('Demo server on 3000'));
+// Manito Debug Server Entry Point
+// Imports and starts the full server implementation from app.js
+import { server } from './app.js';
+
+// The server is already configured and started in app.js
+// This file serves as the main entry point for the application

@@ -1,1 +1,2 @@
-// Placeholder scanner for bundle completeness; see PRD for production spec.
+// Re-export the CodeScanner class from the main core module
+export { CodeScanner, default } from './index.js';
