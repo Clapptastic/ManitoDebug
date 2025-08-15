@@ -1,9 +1,126 @@
 {
-  "name": "manito-demo-extension",
-  "displayName": "Manito Demo",
-  "version": "0.0.1",
+  "name": "manito-vscode",
+  "displayName": "Manito Code Analysis",
+  "description": "AI-powered code analysis and dependency visualization for ManitoDebug",
+  "version": "1.0.0",
+  "publisher": "manito",
   "engines": {
     "vscode": "^1.85.0"
   },
-  "main": "extension.js"
+  "categories": [
+    "Other",
+    "Debuggers",
+    "Visualization"
+  ],
+  "keywords": [
+    "code analysis",
+    "dependencies",
+    "ai",
+    "graph visualization",
+    "debugging"
+  ],
+  "main": "./extension.js",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Clapptastic/ManitoDebug.git"
+  },
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "manito.scanWorkspace",
+        "title": "Scan Workspace",
+        "category": "Manito",
+        "icon": "$(search)"
+      },
+      {
+        "command": "manito.showGraph",
+        "title": "Show Dependency Graph",
+        "category": "Manito",
+        "icon": "$(graph)"
+      },
+      {
+        "command": "manito.openDashboard",
+        "title": "Open Dashboard",
+        "category": "Manito",
+        "icon": "$(dashboard)"
+      },
+      {
+        "command": "manito.installExtension",
+        "title": "Install Extension",
+        "category": "Manito"
+      },
+      {
+        "command": "manito.analyzeDependencies",
+        "title": "Analyze Dependencies",
+        "category": "Manito"
+      },
+      {
+        "command": "manito.findConflicts",
+        "title": "Find Conflicts",
+        "category": "Manito"
+      }
+    ],
+    "views": {
+      "explorer": [
+        {
+          "id": "manitoDependencies",
+          "name": "Manito Dependencies",
+          "when": "manito.hasResults",
+          "type": "tree"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Manito",
+      "properties": {
+        "manito.serverUrl": {
+          "type": "string",
+          "default": "http://localhost:3000",
+          "description": "Manito server URL"
+        },
+        "manito.autoPromptExtension": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically prompt for extension installation"
+        },
+        "manito.excludePatterns": {
+          "type": "array",
+          "default": ["node_modules/**", "dist/**", "build/**", ".git/**"],
+          "description": "Patterns to exclude from scanning"
+        }
+      }
+    },
+    "menus": {
+      "explorer/context": [
+        {
+          "command": "manito.scanWorkspace",
+          "group": "navigation",
+          "when": "explorerResourceIsFolder"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "manito.analyzeDependencies",
+          "group": "navigation",
+          "when": "resourceExtname =~ /\\.(js|ts|jsx|tsx)$/"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "echo 'Extension ready'",
+    "watch": "echo 'Watching...'",
+    "package": "vsce package",
+    "install-local": "vsce package && code --install-extension *.vsix"
+  },
+  "devDependencies": {
+    "@vscode/vsce": "^3.6.0"
+  },
+  "dependencies": {
+    "ws": "^8.14.0"
+  }
 }
