@@ -1,0 +1,16 @@
+{
+  "name": "@manito/cli",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "index.js",
+  "bin": {
+    "manito": "./index.js"
+  },
+  "dependencies": {
+    "@manito/core": "*",
+    "commander": "^11.0.0",
+    "chalk": "^5.3.0",
+    "ora": "^7.0.1",
+    "boxen": "^7.1.1"
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "name": "@manito/core",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "index.js",
+  "dependencies": {
+    "acorn": "^8.11.0",
+    "acorn-walk": "^8.3.0",
+    "glob": "^10.3.0",
+    "typescript": "^5.2.0"
+  }
+}

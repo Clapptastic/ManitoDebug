@@ -1,0 +1,18 @@
+```mermaid
+sequenceDiagram
+  participant U as User
+  participant UI as Frontend
+  participant S as Server
+  participant SC as Scanner
+  participant AI as AI Provider
+  U->>UI: Click "Replay"
+  UI->>S: GET /api/scan
+  S->>SC: Run scanners
+  SC-->>S: Scan results + conflicts
+  S-->>UI: Graph + conflicts
+  U->>UI: Fix in AI (preview)
+  UI->>S: POST /api/ai/send
+  S->>AI: Provider-mapped payload
+  AI-->>S: Response
+  S-->>UI: Status + summary
+```

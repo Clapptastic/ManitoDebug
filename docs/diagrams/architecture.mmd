@@ -1,0 +1,9 @@
+```mermaid
+flowchart LR
+  UI[Frontend UI] --> API[/Express API/]
+  API --> Scan[Code Scanner]
+  Scan --> Graph[(Runtime Graph)]
+  API --> Metrics[Metrics Store]
+  UI <-- WS --> API
+  UI --> AI[AI Preview & Handoff]
+```
