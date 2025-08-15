@@ -1,0 +1,97 @@
+{
+  "folders": [
+    {
+      "name": "🏠 Root",
+      "path": "."
+    },
+    {
+      "name": "🖥️ Server",
+      "path": "./server"
+    },
+    {
+      "name": "⚛️ Client", 
+      "path": "./client"
+    },
+    {
+      "name": "🔍 Core",
+      "path": "./core"
+    },
+    {
+      "name": "🖥️ CLI",
+      "path": "./cli"
+    },
+    {
+      "name": "🔧 VS Code Extension",
+      "path": "./vscode-extension"
+    }
+  ],
+  "settings": {
+    "eslint.workingDirectories": ["server", "client", "core", "cli", "vscode-extension"],
+    "typescript.preferences.importModuleSpecifier": "relative",
+    "files.exclude": {
+      "**/node_modules": true,
+      "**/dist": true,
+      "**/build": true,
+      "**/.git": true,
+      "**/.DS_Store": true,
+      "**/coverage": true
+    },
+    "search.exclude": {
+      "**/node_modules": true,
+      "**/dist": true,
+      "**/build": true,
+      "**/coverage": true,
+      "package-lock.json": true
+    },
+    "emmet.includeLanguages": {
+      "javascript": "javascriptreact"
+    },
+    "tailwindCSS.includeLanguages": {
+      "javascript": "javascript",
+      "html": "html"
+    },
+    "manito.autoPromptExtension": true,
+    "manito.serverUrl": "http://localhost:3000"
+  },
+  "extensions": {
+    "recommendations": [
+      "ms-vscode.vscode-typescript-next",
+      "esbenp.prettier-vscode",
+      "ms-vscode.vscode-eslint",
+      "bradlc.vscode-tailwindcss"
+    ]
+  },
+  "tasks": {
+    "version": "2.0.0",
+    "tasks": [
+      {
+        "label": "Install ManitoDebug Extension",
+        "type": "shell",
+        "command": "npm",
+        "args": ["run", "install-extension"],
+        "group": "build",
+        "presentation": {
+          "echo": true,
+          "reveal": "always",
+          "focus": false,
+          "panel": "shared"
+        },
+        "problemMatcher": []
+      },
+      {
+        "label": "Start Development Servers",
+        "type": "shell",
+        "command": "npm",
+        "args": ["run", "dev"],
+        "group": "build",
+        "presentation": {
+          "echo": true,
+          "reveal": "always",
+          "focus": true,
+          "panel": "shared"
+        },
+        "problemMatcher": []
+      }
+    ]
+  }
+}

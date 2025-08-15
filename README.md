@@ -115,12 +115,26 @@ AI_API_KEY=your_api_key_here
 ```
 
 ### VS Code Extension
-1. Open the `vscode-extension` folder in VS Code
-2. Press `F5` to launch extension development host
-3. Use commands via Command Palette (`Cmd+Shift+P`):
-   - `Manito: Scan Workspace`
-   - `Manito: Show Dependency Graph`
-   - `Manito: Open Dashboard`
+
+**🚀 Auto-Installation:** When you open the ManitoDebug project in VS Code, it will automatically prompt to install the extension!
+
+**Manual Installation:**
+```bash
+# Install extension from command line
+npm run install-extension
+
+# Or package and install manually
+npm run package-extension
+code --install-extension vscode-extension/manito-vscode-1.0.0.vsix
+```
+
+**Usage:**
+- Use Command Palette (`Cmd+Shift+P`):
+  - `Manito: Scan Workspace`
+  - `Manito: Show Dependency Graph`
+  - `Manito: Open Dashboard`
+  - `Manito: Install Extension`
+- Status bar shows: "$(graph) Manito" with real-time updates
 
 ## 📊 Features Deep Dive
 
