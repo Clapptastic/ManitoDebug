@@ -13,6 +13,7 @@ COPY core/package.json ./core/
 COPY server/package.json ./server/
 COPY client/package.json ./client/
 COPY cli/package.json ./cli/
+COPY scripts/ ./scripts/
 
 # Install dependencies with legacy peer deps resolution
 RUN npm ci --legacy-peer-deps
@@ -31,7 +32,7 @@ RUN npm run build
 FROM base AS runner
 WORKDIR /app
 
-ENV NODE_ENV production
+ENV NODE_ENV=production
 
 # Create a non-root user to run the application
 RUN addgroup --system --gid 1001 nodejs
@@ -51,8 +52,8 @@ USER nextjs
 
 EXPOSE 3000
 
-ENV PORT 3000
-ENV HOSTNAME "0.0.0.0"
+ENV PORT=3000
+ENV HOSTNAME="0.0.0.0"
 
 # Start the server
 CMD ["node", "server/app.js"]
