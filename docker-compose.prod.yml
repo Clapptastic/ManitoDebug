@@ -1,116 +1,87 @@
 version: '3.8'
 
 services:
-  # Production application with dynamic port management
   manito-prod:
     build:
       context: .
       dockerfile: Dockerfile.prod
-    container_name: manito-prod
+    container_name: manito-debug-prod
     ports:
-      # Dynamic port mapping for production
-      - "3000-3010:3000-3010"  # Server port range
-      - "80:80"                # HTTP port
-      - "443:443"              # HTTPS port
+      - "3000-3010:3000-3010"
+      - "80:80"
+      - "443:443"
     environment:
       - NODE_ENV=production
-      - PORT=3000
-      # Database configuration
-      - DATABASE_URL=postgresql://manito:${POSTGRES_PASSWORD}@postgres:5432/manito_prod
-      - REDIS_URL=redis://redis:6379
-      # Dynamic port management
       - ENABLE_DYNAMIC_PORTS=true
       - PORT_RANGE_START=3000
       - PORT_RANGE_END=3010
-      # Security
-      - JWT_SECRET=${JWT_SECRET}
-      - SESSION_SECRET=${SESSION_SECRET}
-    volumes:
-      - manito-prod-logs:/app/logs
-      - manito-prod-data:/app/data
+      - CLIENT_PORT_RANGE_START=5173
+      - CLIENT_PORT_RANGE_END=5180
+      - WEBSOCKET_PORT_RANGE_START=3001
+      - WEBSOCKET_PORT_RANGE_END=3010
+      - POSTGRES_USER=manito_prod
+      - POSTGRES_PASSWORD=manito_prod_password
+      - POSTGRES_HOST=postgres
+      - POSTGRES_DB=manito_prod
+      - POSTGRES_PORT=5432
+      - REDIS_URL=redis://redis:6379
     depends_on:
       - postgres
       - redis
     networks:
       - manito-network
     restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
 
-  # Nginx reverse proxy with dynamic port support
   nginx:
     image: nginx:alpine
-    container_name: manito-nginx
+    container_name: manito-nginx-prod
     ports:
       - "80:80"
       - "443:443"
     volumes:
-      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./nginx/ssl:/etc/nginx/ssl:ro
-      - nginx-logs:/var/log/nginx
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf
+      - ./nginx/ssl:/etc/nginx/ssl
     depends_on:
       - manito-prod
     networks:
       - manito-network
     restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "nginx", "-t"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
 
-  # PostgreSQL database
   postgres:
     image: postgres:15-alpine
     container_name: manito-postgres-prod
     environment:
+      - POSTGRES_USER=manito_prod
+      - POSTGRES_PASSWORD=manito_prod_password
       - POSTGRES_DB=manito_prod
-      - POSTGRES_USER=manito
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
     ports:
       - "5432:5432"
     volumes:
-      - postgres-data:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql/data
       - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
     networks:
       - manito-network
     restart: unless-stopped
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U manito -d manito_prod"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
 
-  # Redis cache
   redis:
     image: redis:7-alpine
     container_name: manito-redis-prod
     ports:
       - "6379:6379"
     volumes:
-      - redis-data:/data
+      - redis_data:/data
     networks:
       - manito-network
     restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
 
-  # Production monitoring
   prometheus:
     image: prom/prometheus:latest
-    container_name: manito-prometheus
+    container_name: manito-prometheus-prod
     ports:
       - "9090:9090"
     volumes:
       - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
-      - prometheus-data:/prometheus
+      - prometheus_data:/prometheus
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
       - '--storage.tsdb.path=/prometheus'
@@ -122,17 +93,17 @@ services:
       - manito-network
     restart: unless-stopped
 
-  # Grafana for monitoring visualization
   grafana:
     image: grafana/grafana:latest
-    container_name: manito-grafana
+    container_name: manito-grafana-prod
     ports:
       - "3001:3000"
     environment:
-      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=admin
     volumes:
-      - grafana-data:/var/lib/grafana
-      - ./monitoring/grafana-datasources.yml:/etc/grafana/provisioning/datasources/datasources.yml
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards
+      - ./monitoring/grafana/datasources:/etc/grafana/provisioning/datasources
     depends_on:
       - prometheus
     networks:
@@ -140,20 +111,10 @@ services:
     restart: unless-stopped
 
 volumes:
-  postgres-data:
-    driver: local
-  redis-data:
-    driver: local
-  manito-prod-logs:
-    driver: local
-  manito-prod-data:
-    driver: local
-  prometheus-data:
-    driver: local
-  grafana-data:
-    driver: local
-  nginx-logs:
-    driver: local
+  postgres_data:
+  redis_data:
+  prometheus_data:
+  grafana_data:
 
 networks:
   manito-network:

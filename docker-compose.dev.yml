@@ -1,98 +1,78 @@
 version: '3.8'
 
 services:
-  # Development application with dynamic port management
   manito-dev:
     build:
       context: .
       dockerfile: Dockerfile.dev
-    container_name: manito-dev
+    container_name: manito-debug-dev
     ports:
-      # Dynamic port mapping for development
-      - "3000-3010:3000-3010"  # Server port range
-      - "5173-5180:5173-5180"  # Client port range
-      - "9229:9229"            # Debug port
+      - "3000-3010:3000-3010"
+      - "5173-5180:5173-5180"
+      - "9229:9229"
     environment:
       - NODE_ENV=development
-      - DEBUG=manito:*
-      - CHOKIDAR_USEPOLLING=true
-      - WATCHPACK_POLLING=true
-      # Database configuration
-      - DATABASE_URL=postgresql://manito:manito@postgres:5432/manito_dev
-      - REDIS_URL=redis://redis:6379
-      # Dynamic port management
       - ENABLE_DYNAMIC_PORTS=true
       - PORT_RANGE_START=3000
       - PORT_RANGE_END=3010
+      - CLIENT_PORT_RANGE_START=5173
+      - CLIENT_PORT_RANGE_END=5180
+      - WEBSOCKET_PORT_RANGE_START=3001
+      - WEBSOCKET_PORT_RANGE_END=3010
+      - POSTGRES_USER=manito_dev
+      - POSTGRES_PASSWORD=manito_dev_password
+      - POSTGRES_HOST=postgres
+      - POSTGRES_DB=manito_dev
+      - POSTGRES_PORT=5432
+      - REDIS_URL=redis://redis:6379
     volumes:
       - .:/app
       - /app/node_modules
       - /app/client/node_modules
       - /app/server/node_modules
       - /app/core/node_modules
-      - manito-dev-cache:/app/.cache
-      - manito-dev-logs:/app/logs
     depends_on:
       - postgres
       - redis
     networks:
       - manito-network
     restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 60s
 
-  # PostgreSQL database
   postgres:
     image: postgres:15-alpine
-    container_name: manito-postgres
+    container_name: manito-postgres-dev
     environment:
+      - POSTGRES_USER=manito_dev
+      - POSTGRES_PASSWORD=manito_dev_password
       - POSTGRES_DB=manito_dev
-      - POSTGRES_USER=manito
-      - POSTGRES_PASSWORD=manito
     ports:
       - "5432:5432"
     volumes:
-      - postgres-data:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql/data
       - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
     networks:
       - manito-network
     restart: unless-stopped
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U manito -d manito_dev"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
 
-  # Redis cache
   redis:
     image: redis:7-alpine
-    container_name: manito-redis
+    container_name: manito-redis-dev
     ports:
       - "6379:6379"
     volumes:
-      - redis-data:/data
+      - redis_data:/data
     networks:
       - manito-network
     restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
 
-  # Development monitoring (optional)
   monitoring:
     image: prom/prometheus:latest
-    container_name: manito-monitoring
+    container_name: manito-monitoring-dev
     ports:
       - "9090:9090"
     volumes:
       - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
-      - prometheus-data:/prometheus
+      - prometheus_data:/prometheus
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
       - '--storage.tsdb.path=/prometheus'
@@ -105,16 +85,9 @@ services:
     restart: unless-stopped
 
 volumes:
-  postgres-data:
-    driver: local
-  redis-data:
-    driver: local
-  manito-dev-cache:
-    driver: local
-  manito-dev-logs:
-    driver: local
-  prometheus-data:
-    driver: local
+  postgres_data:
+  redis_data:
+  prometheus_data:
 
 networks:
   manito-network:

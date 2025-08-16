@@ -1,91 +1,52 @@
-# Development Dockerfile for Manito Application
-FROM node:20-alpine
+# Development Dockerfile for ManitoDebug
+FROM node:18-alpine
 
-# Install system dependencies and development tools
+# Set working directory
+WORKDIR /app
+
+# Install system dependencies
 RUN apk add --no-cache \
     git \
     curl \
     bash \
-    vim \
-    nano \
-    htop \
-    tree \
-    jq \
-    libc6-compat \
-    python3 \
-    make \
-    g++ \
+    postgresql-client \
     && rm -rf /var/cache/apk/*
 
-WORKDIR /app
+# Copy package files
+COPY package*.json ./
+COPY client/package*.json ./client/
+COPY server/package*.json ./server/
+COPY core/package*.json ./core/
 
-# Install global development tools
-RUN npm install -g \
-    nodemon \
-    concurrently \
-    @vscode/vsce \
-    eslint \
-    prettier \
-    typescript \
-    ts-node
+# Install dependencies
+RUN npm run install:all
 
-# Copy source code first to avoid postinstall script issues
+# Copy source code
 COPY . .
 
-# Install dependencies with legacy peer deps and development optimizations
-RUN npm ci --legacy-peer-deps --include=dev --fund=false --audit=false
+# Create necessary directories
+RUN mkdir -p server/uploads server/logs client/dist scripts/test-upload
 
-# Create development directories with proper permissions
-RUN mkdir -p \
-    /app/scan-workspace \
-    /app/logs \
-    /app/.cache \
-    /app/coverage \
-    /app/client/.vite \
-    /tmp/manito-dev
-
-# Create non-root user for development
-RUN addgroup -g 1001 -S nodejs && \
-    adduser -S manito -u 1001 -G nodejs
-
-# Set permissions for development
-RUN chown -R manito:nodejs /app /tmp/manito-dev
-
-# Switch to non-root user
-USER manito
-
-# Set development environment variables
+# Set environment variables for dynamic port management
 ENV NODE_ENV=development
-ENV DEBUG=manito:*
-ENV CHOKIDAR_USEPOLLING=true
-ENV WATCHPACK_POLLING=true
+ENV ENABLE_DYNAMIC_PORTS=true
+ENV PORT_RANGE_START=3000
+ENV PORT_RANGE_END=3010
+ENV CLIENT_PORT_RANGE_START=5173
+ENV CLIENT_PORT_RANGE_END=5180
+ENV WEBSOCKET_PORT_RANGE_START=3001
+ENV WEBSOCKET_PORT_RANGE_END=3010
 
-# Expose dynamic ports for development (will be mapped at runtime)
+# Expose dynamic port ranges
 EXPOSE 3000-3010 5173-5180 9229
 
-# Health check for development with extended timeout
-HEALTHCHECK --interval=30s --timeout=15s --start-period=60s --retries=5 \
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:3000/api/health || exit 1
 
-# Create startup script for development with dynamic port support
-RUN echo '#!/bin/bash\n\
-set -e\n\
-\n\
-echo "🚀 Starting ManitoDebug Development Environment"\n\
-echo "📦 Installing/updating dependencies..."\n\
-npm install --legacy-peer-deps\n\
-\n\
-echo "🔧 Running development setup..."\n\
-npm run postinstall\n\
-\n\
-echo "🌟 Starting development servers with dynamic port management..."\n\
-echo "   • Server: Dynamic port assignment (typically 3000)"\n\
-echo "   • Client: Dynamic port assignment (typically 5173)"\n\
-echo "   • Debugger: http://localhost:9229"\n\
-echo "   • Port conflicts will be automatically resolved"\n\
-echo ""\n\
-exec npm run dev\n\
-' > /app/start-dev.sh && chmod +x /app/start-dev.sh
+# Development startup script
+COPY scripts/start-dev.sh /usr/local/bin/start-dev.sh
+RUN chmod +x /usr/local/bin/start-dev.sh
 
-# Default development command
-CMD ["/app/start-dev.sh"]
+# Set the default command
+CMD ["/usr/local/bin/start-dev.sh"]

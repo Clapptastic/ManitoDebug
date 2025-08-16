@@ -1,136 +1,75 @@
-# Production-optimized multi-stage Dockerfile for Manito Application
-FROM node:20-alpine AS base
+# Production Dockerfile for ManitoDebug
+FROM node:18-alpine AS builder
 
-# Install security updates and essential tools
-RUN apk update && apk upgrade && \
-    apk add --no-cache \
-    libc6-compat \
+# Set working directory
+WORKDIR /app
+
+# Install system dependencies
+RUN apk add --no-cache \
+    git \
     curl \
-    tini \
-    dumb-init
+    bash \
+    postgresql-client \
+    && rm -rf /var/cache/apk/*
 
-# Create app directory and user for security
-RUN addgroup --system --gid 1001 nodejs && \
-    adduser --system --uid 1001 --ingroup nodejs appuser
+# Copy package files
+COPY package*.json ./
+COPY client/package*.json ./client/
+COPY server/package*.json ./server/
+COPY core/package*.json ./core/
 
-WORKDIR /app
-RUN chown -R appuser:nodejs /app
-
-# Install dependencies stage
-FROM base AS deps
-USER appuser
-WORKDIR /app
-
-# Copy package files with proper ownership
-COPY --chown=appuser:nodejs package*.json ./
-COPY --chown=appuser:nodejs core/package*.json ./core/
-COPY --chown=appuser:nodejs server/package*.json ./server/
-COPY --chown=appuser:nodejs client/package*.json ./client/
-COPY --chown=appuser:nodejs cli/package*.json ./cli/
-
-# Copy scripts needed for postinstall
-COPY --chown=appuser:nodejs scripts/ ./scripts/
-
-# Install production dependencies with security audit
-ENV NODE_ENV=production
-ENV SKIP_VSCODE_CHECK=true
-RUN npm ci --only=production --legacy-peer-deps --no-optional && \
-    npm audit --audit-level moderate && \
-    npm cache clean --force
-
-# Build stage
-FROM base AS builder
-USER appuser
-WORKDIR /app
-
-# Copy package files for dev dependencies
-COPY --chown=appuser:nodejs package*.json ./
-COPY --chown=appuser:nodejs core/package*.json ./core/
-COPY --chown=appuser:nodejs server/package*.json ./server/
-COPY --chown=appuser:nodejs client/package*.json ./client/
-COPY --chown=appuser:nodejs cli/package*.json ./cli/
-COPY --chown=appuser:nodejs scripts/ ./scripts/
-
-# Install all dependencies including dev for building
-ENV NODE_ENV=development
-ENV SKIP_VSCODE_CHECK=true
-RUN npm ci --legacy-peer-deps --include=dev && npm cache clean --force
+# Install dependencies
+RUN npm run install:all
 
 # Copy source code
-COPY --chown=appuser:nodejs . .
+COPY . .
 
-# Build the client application with production optimizations
-WORKDIR /app/client
-ENV NODE_ENV=production
+# Build the application
 RUN npm run build
 
-# Core library build (if needed)
-WORKDIR /app/core
-RUN npm run build 2>/dev/null || echo "No build script for core"
+# Production stage
+FROM node:18-alpine AS production
 
-# Final production stage
-FROM base AS production
-USER root
-
-# Install additional production tools
-RUN apk add --no-cache \
-    postgresql-client \
-    redis
-
-USER appuser
+# Set working directory
 WORKDIR /app
 
-# Set production environment
-ENV NODE_ENV=production
-ENV NODE_OPTIONS="--max-old-space-size=1536"
-ENV UV_THREADPOOL_SIZE=8
+# Install production dependencies only
+RUN apk add --no-cache \
+    curl \
+    postgresql-client \
+    && rm -rf /var/cache/apk/*
 
-# Copy built application with proper ownership
-COPY --from=builder --chown=appuser:nodejs /app/package*.json ./
-COPY --from=builder --chown=appuser:nodejs /app/core ./core
-COPY --from=builder --chown=appuser:nodejs /app/server ./server
-COPY --from=builder --chown=appuser:nodejs /app/cli ./cli
-COPY --from=builder --chown=appuser:nodejs /app/client/dist ./client/dist
-COPY --from=deps --chown=appuser:nodejs /app/node_modules ./node_modules
+# Copy built application from builder stage
+COPY --from=builder /app/package*.json ./
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/client/dist ./client/dist
+COPY --from=builder /app/server/dist ./server/dist
+COPY --from=builder /app/core/dist ./core/dist
+COPY --from=builder /app/scripts ./scripts
 
 # Create necessary directories
-RUN mkdir -p /app/logs /app/tmp /app/scan-workspace && \
-    chown -R appuser:nodejs /app/logs /app/tmp /app/scan-workspace
+RUN mkdir -p server/uploads server/logs
 
-# Copy production scripts and configuration
-COPY --from=builder --chown=appuser:nodejs /app/scripts/ ./scripts/
-COPY --from=builder --chown=appuser:nodejs /app/docs/ ./docs/
+# Set environment variables for production
+ENV NODE_ENV=production
+ENV ENABLE_DYNAMIC_PORTS=true
+ENV PORT_RANGE_START=3000
+ENV PORT_RANGE_END=3010
+ENV CLIENT_PORT_RANGE_START=5173
+ENV CLIENT_PORT_RANGE_END=5180
+ENV WEBSOCKET_PORT_RANGE_START=3001
+ENV WEBSOCKET_PORT_RANGE_END=3010
 
-# Expose dynamic ports for production (will be mapped at runtime)
+# Expose dynamic port ranges
 EXPOSE 3000-3010 80 443
 
-# Health check for production with dynamic port support
-HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:3000/api/health || exit 1
 
-# Create production startup script with dynamic port management
-RUN echo '#!/bin/bash\n\
-set -e\n\
-\n\
-echo "🚀 Starting ManitoDebug Production Environment"\n\
-echo "🔧 Initializing dynamic port management..."\n\
-\n\
-# Set production environment variables\n\
-export NODE_ENV=production\n\
-export PORT=${PORT:-3000}\n\
-\n\
-echo "🌟 Starting production server on port $PORT"\n\
-echo "   • Dynamic port management enabled"\n\
-echo "   • Health check: http://localhost:$PORT/api/health"\n\
-echo "   • API endpoints: http://localhost:$PORT/api/*"\n\
-echo ""\n\
-\n\
-# Start the production server\n\
-exec node server/index.js\n\
-' > /app/start-prod.sh && chmod +x /app/start-prod.sh
+# Production startup script
+COPY scripts/start-prod.sh /usr/local/bin/start-prod.sh
+RUN chmod +x /usr/local/bin/start-prod.sh
 
-# Use tini as init system
-ENTRYPOINT ["/sbin/tini", "--"]
-
-# Default production command
-CMD ["/app/start-prod.sh"]
+# Set the default command
+CMD ["/usr/local/bin/start-prod.sh"]
