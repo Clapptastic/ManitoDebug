@@ -9,8 +9,8 @@ async function testAIAnalysis() {
 
   const testCases = [
     {
-      name: 'Small Project (test-project)',
-      path: './test-project',
+        name: 'Small Project (core)',
+  path: './core',
       options: { patterns: ['**/*.js'], excludePatterns: ['node_modules/**'] }
     },
     {

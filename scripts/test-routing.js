@@ -78,7 +78,7 @@ class RoutingTester {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          path: './test-project',
+          path: './core',
           options: {
             patterns: ['**/*.js'],
             excludePatterns: ['node_modules/**']

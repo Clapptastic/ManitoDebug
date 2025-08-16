@@ -78,7 +78,7 @@ class FunctionalityTester {
   async testFileSystem() {
     console.log('\n💾 Testing File System...');
     
-    const testDir = path.join(__dirname, '..', 'test-project');
+    const testDir = path.join(__dirname, '..', 'core');
     
     await this.test('Test directory existence', async () => {
       try {
@@ -189,7 +189,7 @@ class FunctionalityTester {
         excludePatterns: ['node_modules/**', 'dist/**', 'build/**']
       });
       
-      const testDir = path.join(__dirname, '..', 'test-project');
+      const testDir = path.join(__dirname, '..', 'core');
       const result = await scanner.scan(testDir);
       
       if (!result || !result.files || !Array.isArray(result.files)) {
