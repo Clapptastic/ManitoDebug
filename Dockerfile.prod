@@ -1,5 +1,5 @@
 # Production-optimized multi-stage Dockerfile for Manito Application
-FROM node:18-alpine AS base
+FROM node:20-alpine AS base
 
 # Install security updates and essential tools
 RUN apk update && apk upgrade && \
@@ -29,6 +29,8 @@ COPY --chown=appuser:nodejs client/package*.json ./client/
 COPY --chown=appuser:nodejs cli/package*.json ./cli/
 
 # Install production dependencies with security audit
+ENV NODE_ENV=production
+ENV SKIP_VSCODE_CHECK=true
 RUN npm ci --only=production --legacy-peer-deps --no-optional && \
     npm audit --audit-level moderate && \
     npm cache clean --force

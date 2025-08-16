@@ -4,6 +4,14 @@ const { exec } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 
+// Skip VS Code checks in production environments or CI
+if (process.env.NODE_ENV === 'production' || 
+    process.env.CI || 
+    process.env.SKIP_VSCODE_CHECK === 'true') {
+  console.log('Skipping VS Code extension check in production/CI mode');
+  process.exit(0);
+}
+
 console.log('🔍 ManitoDebug Setup Check\n');
 
 async function checkVSCode() {
