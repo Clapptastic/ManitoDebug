@@ -8,11 +8,14 @@ import {
   Settings,
   CheckCircle,
   AlertCircle,
-  Clock
+  Clock,
+  Bell
 } from 'lucide-react'
 import Tooltip, { StatusTooltip, HelpTooltip, KeyboardTooltip } from './Tooltip'
+import { useToast } from './Toast'
 
 const Header = ({ isConnected, healthData, onToggleAI, onOpenSettings }) => {
+  const toast = useToast()
   const getHealthStatus = () => {
     if (!healthData) {
       return { status: 'unknown', color: 'text-gray-400', icon: Clock }
@@ -31,7 +34,7 @@ const Header = ({ isConnected, healthData, onToggleAI, onOpenSettings }) => {
   const HealthIcon = healthStatus.icon
 
   return (
-    <header className="glass-panel m-4 mb-0 p-4">
+    <header className="glass-panel m-4 mb-0 p-4 overflow-visible">
       <div className="flex items-center justify-between">
         {/* Left side - App title and status */}
         <div className="flex items-center space-x-6">
@@ -131,6 +134,21 @@ const Header = ({ isConnected, healthData, onToggleAI, onOpenSettings }) => {
               <span>AI Assistant</span>
             </button>
           </KeyboardTooltip>
+
+          {/* Test Toast Button */}
+          <Tooltip content="Test toast notifications">
+            <button 
+              onClick={() => {
+                toast.success('Test success message!', { title: 'Success' })
+                setTimeout(() => toast.error('Test error message!', { title: 'Error' }), 1000)
+                setTimeout(() => toast.warning('Test warning message!', { title: 'Warning' }), 2000)
+                setTimeout(() => toast.info('Test info message!', { title: 'Info' }), 3000)
+              }}
+              className="p-2 text-gray-400 hover:text-gray-200 hover:bg-gray-800 rounded-lg transition-colors focus:ring-2 focus:ring-blue-500/50 focus:outline-none"
+            >
+              <Bell className="w-5 h-5" />
+            </button>
+          </Tooltip>
 
           {/* Settings Button */}
           <KeyboardTooltip shortcut="Cmd+," description="Open Settings">

@@ -286,7 +286,7 @@ function AppContent() {
   ]
 
   return (
-    <div className="h-screen bg-gray-950 flex flex-col overflow-hidden">
+    <div className="h-screen bg-gray-950 flex flex-col overflow-visible">
         <Header 
           isConnected={isConnected} 
           healthData={healthData}
@@ -308,7 +308,7 @@ function AppContent() {
         
         <main className="flex-1 flex flex-col overflow-hidden">
           {/* Toolbar */}
-          <div className="glass-panel m-4 p-4 flex items-center justify-between">
+          <div className="glass-panel m-4 p-4 flex items-center justify-between overflow-visible">
             <div className="flex space-x-4">
               {tabConfig.map(({ id, label, icon: Icon }, index) => {
                 const shortcutNumber = index + 1
