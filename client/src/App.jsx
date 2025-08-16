@@ -48,13 +48,24 @@ function AppContent() {
   const feedback = useUserFeedback()
 
   // WebSocket connection for real-time updates
-  const { isConnected, lastMessage } = useWebSocket('ws://localhost:3000/ws')
+    // Get port configuration
+  const getPortConfig = () => {
+    if (typeof __PORT_CONFIG__ !== 'undefined') {
+      return __PORT_CONFIG__;
+    }
+    return {
+      server: process.env.REACT_APP_SERVER_PORT || 3000
+    };
+  };
+
+  const portConfig = getPortConfig();
+  const { isConnected, lastMessage } = useWebSocket(`ws://localhost:${portConfig.server}/ws`)
 
   // Health check query
   const { data: healthData } = useQuery({
     queryKey: ['health'],
     queryFn: async () => {
-      const response = await fetch('http://localhost:3000/api/health')
+      const response = await fetch(`http://localhost:${portConfig.server}/api/health?detailed=true`)
       return response.json()
     },
     refetchInterval: 30000, // 30 seconds
@@ -156,7 +167,7 @@ function AppContent() {
       setScanProgress({ stage: 'initializing', progress: 0, files: 0 })
       feedback.scanStarted()
       
-      const response = await fetch('http://localhost:3000/api/scan', {
+      const response = await fetch(`http://localhost:${portConfig.server}/api/scan`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -214,7 +225,7 @@ function AppContent() {
       formData.append('patterns', JSON.stringify(['**/*.{js,jsx,ts,tsx}']))
       formData.append('excludePatterns', JSON.stringify(['node_modules/**', 'dist/**', 'build/**', '.git/**']))
       
-      const response = await fetch('http://localhost:3000/api/upload', {
+      const response = await fetch(`http://localhost:${portConfig.server}/api/upload`, {
         method: 'POST',
         body: formData
       })
@@ -252,7 +263,7 @@ function AppContent() {
         return
       }
       
-      const response = await fetch('http://localhost:3000/api/upload-directory', {
+      const response = await fetch(`http://localhost:${portConfig.server}/api/upload-directory`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

@@ -1,37 +1,17 @@
 import React from 'react'
 import { 
   Brain, 
-  Wifi, 
-  WifiOff, 
-  Server, 
   Activity, 
   Settings,
-  CheckCircle,
-  AlertCircle,
-  Clock,
   Bell
 } from 'lucide-react'
 import Tooltip, { StatusTooltip, HelpTooltip, KeyboardTooltip } from './Tooltip'
 import { useToast } from './Toast'
+import StatusIndicators from './StatusIndicators'
 
 const Header = ({ isConnected, healthData, onToggleAI, onOpenSettings }) => {
   const toast = useToast()
-  const getHealthStatus = () => {
-    if (!healthData) {
-      return { status: 'unknown', color: 'text-gray-400', icon: Clock }
-    }
 
-    if (healthData.status === 'healthy') {
-      return { status: 'healthy', color: 'text-green-400', icon: CheckCircle }
-    } else if (healthData.status === 'warning') {
-      return { status: 'warning', color: 'text-yellow-400', icon: AlertCircle }
-    } else {
-      return { status: 'error', color: 'text-red-400', icon: AlertCircle }
-    }
-  }
-
-  const healthStatus = getHealthStatus()
-  const HealthIcon = healthStatus.icon
 
   return (
     <header className="glass-panel m-4 mb-0 p-4 overflow-visible">
@@ -45,51 +25,8 @@ const Header = ({ isConnected, healthData, onToggleAI, onOpenSettings }) => {
             <h1 className="text-xl font-bold text-gray-100">ManitoDebug</h1>
           </div>
 
-          {/* Connection Status */}
-          <StatusTooltip status={isConnected ? 'online' : 'offline'}>
-            <div className="flex items-center space-x-2 px-2 py-1 rounded-lg hover:bg-gray-700/30 transition-colors cursor-help">
-              {isConnected ? (
-                <Wifi className="w-4 h-4 text-green-400" />
-              ) : (
-                <WifiOff className="w-4 h-4 text-red-400" />
-              )}
-              <span className={`text-sm ${isConnected ? 'text-green-400' : 'text-red-400'}`}>
-                {isConnected ? 'Connected' : 'Disconnected'}
-              </span>
-            </div>
-          </StatusTooltip>
-
-          {/* Health Status */}
-          <Tooltip 
-            content={
-              <div className="space-y-2">
-                <div className="font-semibold">Server Health: {healthData?.status || 'Unknown'}</div>
-                {healthData?.uptime && (
-                  <div className="text-sm">Uptime: {Math.floor(healthData.uptime / 60)}m {Math.floor(healthData.uptime % 60)}s</div>
-                )}
-                {healthData?.memory && (
-                  <div className="text-sm">Memory: {Math.round(healthData.memory.used / 1024 / 1024)}MB</div>
-                )}
-                {healthData?.cpu && (
-                  <div className="text-sm">CPU: {Math.round(healthData.cpu)}%</div>
-                )}
-              </div>
-            }
-            position="bottom"
-          >
-            <div className="flex items-center space-x-2 px-2 py-1 rounded-lg hover:bg-gray-700/30 transition-colors cursor-help">
-              <Server className="w-4 h-4 text-gray-400" />
-              <HealthIcon className={`w-4 h-4 ${healthStatus.color}`} />
-              <span className={`text-sm ${healthStatus.color}`}>
-                {healthData?.status || 'Unknown'}
-              </span>
-              {healthData?.uptime && (
-                <span className="text-xs text-gray-500">
-                  ({Math.floor(healthData.uptime / 60)}m)
-                </span>
-              )}
-            </div>
-          </Tooltip>
+          {/* Status Indicators */}
+          <StatusIndicators healthData={healthData} isConnected={isConnected} />
         </div>
 
         {/* Right side - Controls and stats */}
@@ -97,27 +34,43 @@ const Header = ({ isConnected, healthData, onToggleAI, onOpenSettings }) => {
           {/* Health metrics */}
           {healthData && (
             <div className="flex items-center space-x-4 text-sm text-gray-400">
-              {healthData.memory && (
+              {healthData.system?.memory && (
                 <div className="flex items-center space-x-1">
                   <span>Memory:</span>
                   <span className="text-gray-200">
-                    {Math.round(healthData.memory.used / 1024 / 1024)}MB
+                    {healthData.system.memory.used}MB
                   </span>
                 </div>
               )}
-              {healthData.cpu && (
+              {healthData.system?.cpu && (
                 <div className="flex items-center space-x-1">
                   <span>CPU:</span>
                   <span className="text-gray-200">
-                    {Math.round(healthData.cpu)}%
+                    {healthData.system.cpu.user}ms
                   </span>
                 </div>
               )}
-              {healthData.activeScans && (
+              {healthData.services?.database?.pool && (
                 <div className="flex items-center space-x-1">
-                  <span>Active Scans:</span>
+                  <span>DB Pool:</span>
                   <span className="text-gray-200">
-                    {healthData.activeScans}
+                    {healthData.services.database.pool.idleCount} idle
+                  </span>
+                </div>
+              )}
+              {healthData.services?.database?.cache && (
+                <div className="flex items-center space-x-1">
+                  <span>Cache:</span>
+                  <span className="text-gray-200">
+                    {Math.round(healthData.services.database.cache.hitRate || 0)}%
+                  </span>
+                </div>
+              )}
+              {healthData.services?.websocket?.connections && (
+                <div className="flex items-center space-x-1">
+                  <span>WS:</span>
+                  <span className="text-gray-200">
+                    {healthData.services.websocket.connections}
                   </span>
                 </div>
               )}

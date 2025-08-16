@@ -1,6 +1,15 @@
 import { useState, useEffect, useRef } from 'react'
 
 function useWebSocket(url) {
+  // Get port configuration from global or use defaults
+  const getPortConfig = () => {
+    if (typeof __PORT_CONFIG__ !== 'undefined') {
+      return __PORT_CONFIG__;
+    }
+    return {
+      server: process.env.REACT_APP_SERVER_PORT || 3000
+    };
+  };
   const [isConnected, setIsConnected] = useState(false)
   const [lastMessage, setLastMessage] = useState(null)
   const [error, setError] = useState(null)

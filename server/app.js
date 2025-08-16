@@ -26,6 +26,7 @@ import migrations from './services/migrations.js';
 import AIAnalysisFormatter from '../core/ai-analysis.js';
 import WebSocketService from './services/websocket.js';
 import semanticSearchService from './services/semanticSearch.js';
+import { getPortConfig, validatePortConfig } from './config/ports.js';
 
 // Logger setup
 const logger = winston.createLogger({
@@ -213,14 +214,30 @@ app.get('/api/health', async (req, res) => {
         }
       };
 
-      // Test database connection
+      // Test database connection with enhanced status
       try {
         const dbHealth = await enhancedDb.health();
-        health.services.database = dbHealth;
+        health.services.database = {
+          status: dbHealth.connected ? 'ok' : 'error',
+          connected: dbHealth.connected,
+          pool: dbHealth.pool,
+          cache: dbHealth.cache,
+          serverTime: dbHealth.serverTime,
+          version: dbHealth.version,
+          message: dbHealth.connected ? 'Database connected and healthy' : 'Database connection failed'
+        };
+        
+        // Update overall health status based on database
+        if (!dbHealth.connected) {
+          health.status = 'degraded';
+        }
       } catch (error) {
         health.services.database = { 
           status: 'error', 
-          message: error.message 
+          connected: false,
+          message: error.message,
+          pool: null,
+          cache: null
         };
         health.status = 'degraded';
       }
@@ -1464,7 +1481,30 @@ app.use((req, res) => {
   res.status(404).json({ error: 'Not found', path: req.path });
 });
 
-const PORT = process.env.PORT || 3000;
+// Initialize port configuration
+let PORT;
+let portConfig;
+
+try {
+  // Get port configuration with automatic conflict resolution
+  portConfig = await getPortConfig(process.env.NODE_ENV || 'development');
+  
+  // Validate configuration
+  const validation = validatePortConfig(portConfig);
+  if (!validation.valid) {
+    logger.warn('⚠️  Port configuration issues:');
+    validation.issues.forEach(issue => logger.warn(`  - ${issue}`));
+  }
+  
+  PORT = portConfig.server;
+  
+  logger.info(`🔧 Environment: ${process.env.NODE_ENV || 'development'}`);
+  logger.info(`📊 Port configuration:`, portConfig);
+  
+} catch (error) {
+  logger.error('❌ Failed to configure ports, using defaults:', error);
+  PORT = process.env.PORT || 3000;
+}
 
 server.listen(PORT, async () => {
   logger.info(`Manito API Server running on port ${PORT}`);
