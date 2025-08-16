@@ -47,13 +47,13 @@ function AppContent() {
   const feedback = useUserFeedback()
 
   // WebSocket connection for real-time updates
-  const { isConnected, lastMessage } = useWebSocket('ws://localhost:3001')
+  const { isConnected, lastMessage } = useWebSocket('ws://localhost:3000')
 
   // Health check query
   const { data: healthData } = useQuery({
     queryKey: ['health'],
     queryFn: async () => {
-      const response = await fetch('http://localhost:3001/api/health')
+      const response = await fetch('http://localhost:3000/api/health')
       return response.json()
     },
     refetchInterval: 30000, // 30 seconds
@@ -155,7 +155,7 @@ function AppContent() {
       setScanProgress({ stage: 'initializing', progress: 0, files: 0 })
       feedback.scanStarted()
       
-      const response = await fetch('http://localhost:3001/api/scan', {
+      const response = await fetch('http://localhost:3000/api/scan', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -213,7 +213,7 @@ function AppContent() {
       formData.append('patterns', JSON.stringify(['**/*.{js,jsx,ts,tsx}']))
       formData.append('excludePatterns', JSON.stringify(['node_modules/**', 'dist/**', 'build/**', '.git/**']))
       
-      const response = await fetch('http://localhost:3001/api/upload', {
+      const response = await fetch('http://localhost:3000/api/upload', {
         method: 'POST',
         body: formData
       })
@@ -251,7 +251,7 @@ function AppContent() {
         return
       }
       
-      const response = await fetch('http://localhost:3001/api/upload-directory', {
+      const response = await fetch('http://localhost:3000/api/upload-directory', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
