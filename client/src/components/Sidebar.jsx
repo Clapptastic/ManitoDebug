@@ -19,8 +19,10 @@ import {
 } from 'lucide-react'
 import { selectDirectory, isFileSystemAccessSupported, createUploadFormData } from '../utils/fileSystemAccess'
 import Tooltip, { HelpTooltip, KeyboardTooltip } from './Tooltip'
+import { useUserFeedback } from '../utils/userFeedback'
 
 function Sidebar({ scanPath, setScanPath, onScan, onUpload, onBrowseDirectory, isScanning, scanResults, onOpenSettings }) {
+  const feedback = useUserFeedback()
   const [isDragOver, setIsDragOver] = useState(false)
   const [inputMode, setInputMode] = useState(() => {
     // Default to browse mode if File System Access API is supported
@@ -54,13 +56,19 @@ function Sidebar({ scanPath, setScanPath, onScan, onUpload, onBrowseDirectory, i
         setInputMode('upload')
         setUploadFile(file)
         setProjectName(file.name.replace('.zip', ''))
+        feedback.info('ZIP file detected. Ready to upload and analyze.')
       } else if (file.webkitGetAsEntry) {
         // Handle folder drop for path mode
         const entry = file.webkitGetAsEntry()
         if (entry && entry.isDirectory) {
           setInputMode('path')
           setScanPath(file.path)
+          feedback.info('Directory detected. Ready to analyze.')
+        } else {
+          feedback.warning('Please drop a ZIP file or directory.')
         }
+      } else {
+        feedback.warning('Please drop a ZIP file or directory.')
       }
     }
   }
@@ -363,7 +371,13 @@ function Sidebar({ scanPath, setScanPath, onScan, onUpload, onBrowseDirectory, i
             onClick={
               inputMode === 'browse' ? () => onBrowseDirectory(selectedDirectory, projectName) :
               inputMode === 'upload' ? () => onUpload(uploadFile, projectName) : 
-              onScan
+              () => {
+                if (!scanPath.trim()) {
+                  feedback.validationError('scan path', 'Please enter a valid path to scan')
+                  return
+                }
+                onScan()
+              }
             }
             disabled={isScanning || (
               inputMode === 'browse' ? !selectedDirectory :

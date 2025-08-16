@@ -24,6 +24,7 @@ import { SettingsProvider } from './contexts/SettingsContext'
 import { ScanningLoader, LoadingOverlay } from './components/Loading'
 import Tooltip from './components/Tooltip'
 import useWebSocket from './hooks/useWebSocket'
+import { useUserFeedback, handleErrorWithFeedback, handleSuccessWithFeedback } from './utils/userFeedback'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -43,6 +44,7 @@ function AppContent() {
   const [showSettings, setShowSettings] = useState(false)
   const [scanProgress, setScanProgress] = useState({ stage: 'initializing', progress: 0, files: 0 })
   const { toast } = useToast()
+  const feedback = useUserFeedback()
 
   // WebSocket connection for real-time updates
   const { isConnected, lastMessage } = useWebSocket('ws://localhost:3001')
@@ -116,37 +118,42 @@ function AppContent() {
         if (message.data.status === 'started') {
           setIsScanning(true)
           setScanProgress({ stage: 'initializing', progress: 0, files: 0 })
-          toast.loading('Starting code analysis...', { title: 'Scanning' })
+          feedback.scanStarted()
         } else if (message.data.status === 'progress') {
           setScanProgress({
             stage: message.data.stage || 'analyzing',
             progress: message.data.progress || 0,
             files: message.data.filesProcessed || 0
           })
+          feedback.scanProgress(message.data.filesProcessed || 0, message.data.stage || 'analyzing')
         } else if (message.data.status === 'completed') {
           setIsScanning(false)
           setScanProgress({ stage: 'finalizing', progress: 100, files: message.data.filesProcessed || 0 })
-          toast.scanComplete({ 
-            files: message.data.filesProcessed || 0, 
-            conflicts: message.data.conflicts || 0 
-          })
+          feedback.scanCompleted(message.data.filesProcessed || 0, message.data.conflicts || 0)
           // Refresh scan results
           fetchScanResults()
         } else if (message.data.status === 'failed') {
           setIsScanning(false)
           console.error('Scan failed:', message.data.error)
-          toast.error(`Scan failed: ${message.data.error}`, { 
-            title: 'Scan Error' 
-          })
+          feedback.scanFailed(message.data.error)
+        }
+      } else if (message.channel === 'connection') {
+        if (message.data.status === 'connected') {
+          feedback.systemConnected()
+        } else if (message.data.status === 'disconnected') {
+          feedback.systemDisconnected()
+        } else if (message.data.status === 'reconnecting') {
+          feedback.systemReconnecting()
         }
       }
     }
-  }, [lastMessage])
+  }, [lastMessage, feedback])
 
   const handleScan = async () => {
     try {
       setIsScanning(true)
       setScanProgress({ stage: 'initializing', progress: 0, files: 0 })
+      feedback.scanStarted()
       
       const response = await fetch('http://localhost:3001/api/scan', {
         method: 'POST',
@@ -162,24 +169,21 @@ function AppContent() {
         }),
       })
       
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+      }
+      
       const result = await response.json()
       if (result.success) {
         setScanResults(result.data)
-        toast.scanComplete({
-          files: result.data.files?.length || 0,
-          conflicts: result.data.conflicts?.length || 0
-        })
+        feedback.scanCompleted(result.data.files?.length || 0, result.data.conflicts?.length || 0)
       } else {
         console.error('Scan failed:', result.error)
-        toast.error(result.error || 'Failed to scan project', {
-          title: 'Scan Failed'
-        })
+        feedback.scanFailed(result.error || 'Failed to scan project')
       }
     } catch (error) {
       console.error('Scan error:', error)
-      toast.error('Network error occurred while scanning', {
-        title: 'Connection Error'
-      })
+      handleErrorWithFeedback(error, 'scan operation', feedback)
     } finally {
       setIsScanning(false)
       setScanProgress({ stage: 'finalizing', progress: 100, files: 0 })
@@ -190,6 +194,18 @@ function AppContent() {
     try {
       setIsScanning(true)
       setScanProgress({ stage: 'uploading', progress: 0, files: 0 })
+      feedback.uploadStarted()
+      
+      // Validate file
+      if (!file.name.endsWith('.zip')) {
+        feedback.uploadInvalidFile()
+        return
+      }
+      
+      if (file.size > 50 * 1024 * 1024) { // 50MB limit
+        feedback.uploadFileTooLarge()
+        return
+      }
       
       const formData = new FormData()
       formData.append('projectFile', file)
@@ -202,24 +218,21 @@ function AppContent() {
         body: formData
       })
       
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+      }
+      
       const result = await response.json()
       if (result.success) {
         setScanResults(result.data)
-        toast.success(`Project uploaded and analyzed successfully!`, {
-          title: 'Upload Complete',
-          duration: 5000
-        })
+        feedback.uploadCompleted(projectName || file.name.replace('.zip', ''))
       } else {
         console.error('Upload failed:', result.error)
-        toast.error(result.error || 'Failed to upload and analyze project', {
-          title: 'Upload Failed'
-        })
+        feedback.uploadFailed(result.error || 'Failed to upload and analyze project')
       }
     } catch (error) {
       console.error('Upload error:', error)
-      toast.error('Network error occurred during upload', {
-        title: 'Connection Error'
-      })
+      handleErrorWithFeedback(error, 'upload operation', feedback)
     } finally {
       setIsScanning(false)
       setScanProgress({ stage: 'finalizing', progress: 100, files: 0 })
@@ -230,6 +243,13 @@ function AppContent() {
     try {
       setIsScanning(true)
       setScanProgress({ stage: 'processing', progress: 0, files: directoryData.files.length })
+      feedback.scanStarted()
+      
+      // Validate directory data
+      if (!directoryData.files || directoryData.files.length === 0) {
+        feedback.scanNoFiles()
+        return
+      }
       
       const response = await fetch('http://localhost:3001/api/upload-directory', {
         method: 'POST',
@@ -250,24 +270,21 @@ function AppContent() {
         })
       })
       
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+      }
+      
       const result = await response.json()
       if (result.success) {
         setScanResults(result.data)
-        toast.success(`Directory analyzed successfully!`, {
-          title: 'Analysis Complete',
-          duration: 5000
-        })
+        feedback.scanCompleted(result.data.files?.length || 0, result.data.conflicts?.length || 0)
       } else {
         console.error('Directory analysis failed:', result.error)
-        toast.error(result.error || 'Failed to analyze directory', {
-          title: 'Analysis Failed'
-        })
+        feedback.scanFailed(result.error || 'Failed to analyze directory')
       }
     } catch (error) {
       console.error('Directory analysis error:', error)
-      toast.error('Network error occurred during directory analysis', {
-        title: 'Connection Error'
-      })
+      handleErrorWithFeedback(error, 'directory analysis', feedback)
     } finally {
       setIsScanning(false)
       setScanProgress({ stage: 'finalizing', progress: 100, files: 0 })

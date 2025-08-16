@@ -19,15 +19,16 @@ import {
   Star
 } from 'lucide-react'
 import { useSettings } from '../contexts/SettingsContext'
+import { useUserFeedback } from '../utils/userFeedback'
 
 function AIPanel({ scanResults, onClose }) {
   const { 
     settings, 
     getValidAIProvider, 
     getAIApiKey, 
-    getAIModel,
-    showNotification 
+    getAIModel
   } = useSettings()
+  const feedback = useUserFeedback()
   
   const [messages, setMessages] = useState([
     {
@@ -212,7 +213,18 @@ function AIPanel({ scanResults, onClose }) {
       setMessages(prev => [...prev, aiResponse])
     } catch (error) {
       console.error('Error getting AI response:', error)
-      showNotification('error', 'Failed to get AI response. Please check your API configuration.')
+      
+      // Determine specific error type and provide appropriate feedback
+      if (error.message?.includes('No API key configured')) {
+        feedback.aiNoApiKey()
+      } else if (error.message?.includes('Invalid API key')) {
+        feedback.aiInvalidApiKey()
+      } else if (error.message?.includes('Rate limit')) {
+        feedback.aiRateLimited()
+      } else {
+        feedback.aiFailed(error.message || 'Unknown error occurred')
+      }
+      
       setMessages(prev => [...prev, {
         id: Date.now() + 1,
         type: 'ai',
@@ -278,7 +290,16 @@ function AIPanel({ scanResults, onClose }) {
     })
 
     if (!response.ok) {
-      throw new Error(`OpenAI API error: ${response.status}`)
+      const errorData = await response.json().catch(() => ({}))
+      if (response.status === 401) {
+        throw new Error('Invalid API key. Please check your OpenAI API key in settings.')
+      } else if (response.status === 429) {
+        throw new Error('Rate limit exceeded. Please wait a moment and try again.')
+      } else if (response.status === 400) {
+        throw new Error(`OpenAI API error: ${errorData.error?.message || 'Invalid request'}`)
+      } else {
+        throw new Error(`OpenAI API error: ${response.status} - ${errorData.error?.message || 'Unknown error'}`)
+      }
     }
 
     const data = await response.json()
@@ -306,7 +327,16 @@ function AIPanel({ scanResults, onClose }) {
     })
 
     if (!response.ok) {
-      throw new Error(`Anthropic API error: ${response.status}`)
+      const errorData = await response.json().catch(() => ({}))
+      if (response.status === 401) {
+        throw new Error('Invalid API key. Please check your Anthropic API key in settings.')
+      } else if (response.status === 429) {
+        throw new Error('Rate limit exceeded. Please wait a moment and try again.')
+      } else if (response.status === 400) {
+        throw new Error(`Anthropic API error: ${errorData.error?.message || 'Invalid request'}`)
+      } else {
+        throw new Error(`Anthropic API error: ${response.status} - ${errorData.error?.message || 'Unknown error'}`)
+      }
     }
 
     const data = await response.json()

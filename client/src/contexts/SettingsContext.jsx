@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react'
 import { useToast } from '../components/Toast'
+import { useUserFeedback } from '../utils/userFeedback'
 
 const SettingsContext = createContext()
 
@@ -13,6 +14,7 @@ export const useSettings = () => {
 
 export const SettingsProvider = ({ children }) => {
   const { toast } = useToast()
+  const feedback = useUserFeedback()
   const [settings, setSettings] = useState({
     // General Settings
     theme: 'dark',
@@ -122,17 +124,12 @@ export const SettingsProvider = ({ children }) => {
       
       // Show success notification if notifications are enabled
       if (settings.enableNotifications) {
-        toast.success('Settings saved successfully!', {
-          actions: [{
-            label: 'Reload App',
-            onClick: () => window.location.reload()
-          }]
-        })
+        feedback.settingsSaved()
       }
     } catch (error) {
       console.error('Failed to save settings:', error)
       if (settings.errorNotifications) {
-        toast.error('Failed to save settings')
+        feedback.settingsFailed()
       }
     }
   }
@@ -186,7 +183,7 @@ export const SettingsProvider = ({ children }) => {
     setHasChanges(true)
     
     if (settings.enableNotifications) {
-      toast.info('Settings reset to defaults')
+      feedback.settingsReset()
     }
   }
 
