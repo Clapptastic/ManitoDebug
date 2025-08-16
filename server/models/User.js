@@ -1,6 +1,6 @@
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
-import db from '../services/database.js';
+import enhancedDb from '../services/enhancedDatabase.js';
 
 class User {
   constructor(data = {}) {
@@ -55,7 +55,7 @@ class User {
     const password_hash = await bcrypt.hash(password, saltRounds);
 
     // Create user record
-    const result = await db.insert('users', {
+    const result = await enhancedDb.insert('users', {
       email: email.toLowerCase(),
       password_hash,
       first_name,
@@ -70,7 +70,7 @@ class User {
 
   // Find user by ID
   static async findById(id) {
-    const users = await db.select('users', 'id = $1 AND is_active = true', [id]);
+    const users = await enhancedDb.select('users', { where: 'id = $1 AND is_active = true', whereParams: [id] });
     if (users.length === 0) return null;
     
     return new User(users[0]);
@@ -78,7 +78,7 @@ class User {
 
   // Find user by email
   static async findByEmail(email) {
-    const users = await db.select('users', 'email = $1 AND is_active = true', [email.toLowerCase()]);
+    const users = await enhancedDb.select('users', { where: 'email = $1 AND is_active = true', whereParams: [email.toLowerCase()] });
     if (users.length === 0) return null;
     
     return new User(users[0]);
@@ -86,7 +86,7 @@ class User {
 
   // Get all users (admin only)
   static async findAll(limit = 50, offset = 0) {
-    const users = await db.query(`
+    const users = await enhancedDb.query(`
       SELECT id, email, first_name, last_name, role, is_active, 
              email_verified, last_login, created_at, updated_at
       FROM users
@@ -157,7 +157,7 @@ class User {
 
     updateData.updated_at = new Date();
 
-    const result = await db.update('users', updateData, 'id = $1', [this.id]);
+    const result = await enhancedDb.update('users', updateData, 'id = $1', [this.id]);
     
     if (result) {
       // Parse JSON fields for the instance
@@ -198,7 +198,7 @@ class User {
     const password_hash = await bcrypt.hash(newPassword, saltRounds);
 
     // Update password
-    const result = await db.update('users', { 
+    const result = await enhancedDb.update('users', { 
       password_hash, 
       updated_at: new Date() 
     }, 'id = $1', [this.id]);
@@ -215,7 +215,7 @@ class User {
   // Update last login timestamp
   async updateLastLogin() {
     const now = new Date();
-    await db.update('users', { last_login: now }, 'id = $1', [this.id]);
+    await enhancedDb.update('users', { last_login: now }, 'id = $1', [this.id]);
     this.last_login = now;
   }
 
@@ -257,7 +257,7 @@ class User {
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + 7); // 7 days from now
 
-    const session = await db.insert('sessions', {
+    const session = await enhancedDb.insert('sessions', {
       user_id: this.id,
       token_hash: tokenHash,
       expires_at: expiresAt,
@@ -270,37 +270,35 @@ class User {
 
   // Get user's active sessions
   async getSessions() {
-    const sessions = await db.select(
-      'sessions',
-      'user_id = $1 AND expires_at > NOW()',
-      [this.id],
-      'created_at DESC'
-    );
+    const sessions = await enhancedDb.select('sessions', {
+      where: 'user_id = $1 AND expires_at > NOW()',
+      whereParams: [this.id],
+      orderBy: 'created_at DESC'
+    });
 
     return sessions;
   }
 
   // Revoke session
   async revokeSession(sessionId) {
-    const result = await db.delete('sessions', 'id = $1 AND user_id = $2', [sessionId, this.id]);
+    const result = await enhancedDb.delete('sessions', 'id = $1 AND user_id = $2', [sessionId, this.id]);
     return result.length > 0;
   }
 
   // Revoke all sessions
   async revokeAllSessions() {
-    const result = await db.delete('sessions', 'user_id = $1', [this.id]);
+    const result = await enhancedDb.delete('sessions', 'user_id = $1', [this.id]);
     return result.length;
   }
 
   // Get user's projects
   async getProjects(limit = 20) {
-    const projects = await db.select(
-      'projects',
-      'user_id = $1',
-      [this.id],
-      'updated_at DESC',
-      limit
-    );
+    const projects = await enhancedDb.select('projects', {
+      where: 'user_id = $1',
+      whereParams: [this.id],
+      orderBy: 'updated_at DESC',
+      limit: limit
+    });
 
     return projects;
   }
@@ -358,7 +356,7 @@ class User {
   // Delete user and all associated data
   async delete() {
     // This will cascade delete all related data due to foreign key constraints
-    const result = await db.delete('users', 'id = $1', [this.id]);
+    const result = await enhancedDb.delete('users', 'id = $1', [this.id]);
     return result.length > 0;
   }
 }

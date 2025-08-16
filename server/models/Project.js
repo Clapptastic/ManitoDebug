@@ -1,4 +1,4 @@
-import db from '../services/database.js';
+import enhancedDb from '../services/enhancedDatabase.js';
 
 class Project {
   constructor(data = {}) {
@@ -34,7 +34,7 @@ class Project {
         insertData.user_id = userId;
       }
 
-      const result = await db.insert('projects', insertData);
+      const result = await enhancedDb.insert('projects', insertData);
 
       return new Project(result);
     } catch (error) {
@@ -47,7 +47,7 @@ class Project {
 
   // Find project by ID
   static async findById(id) {
-    const projects = await db.select('projects', 'id = $1', [id]);
+    const projects = await enhancedDb.select('projects', { where: 'id = $1', whereParams: [id] });
     return projects.length > 0 ? new Project(projects[0]) : null;
   }
 
@@ -63,39 +63,37 @@ class Project {
       whereClause += ' AND user_id IS NULL';
     }
     
-    const projects = await db.select('projects', whereClause, params);
+    const projects = await enhancedDb.select('projects', { where: whereClause, whereParams: params });
     return projects.length > 0 ? new Project(projects[0]) : null;
   }
 
   // Find projects by user ID
   static async findByUserId(userId, limit = 50, offset = 0) {
-    const projects = await db.select(
-      'projects',
-      'user_id = $1',
-      [userId],
-      'updated_at DESC',
-      `${limit} OFFSET ${offset}`
-    );
+    const projects = await enhancedDb.select('projects', {
+      where: 'user_id = $1',
+      whereParams: [userId],
+      orderBy: 'updated_at DESC',
+      limit: `${limit} OFFSET ${offset}`
+    });
     
     return projects.map(project => new Project(project));
   }
 
   // Get all projects with optional pagination
   static async findAll(limit = 50, offset = 0) {
-    const projects = await db.select(
-      'projects', 
-      '', 
-      [], 
-      'updated_at DESC', 
-      `${limit} OFFSET ${offset}`
-    );
+    const projects = await enhancedDb.select('projects', {
+      where: '',
+      whereParams: [],
+      orderBy: 'updated_at DESC',
+      limit: `${limit} OFFSET ${offset}`
+    });
     
     return projects.map(project => new Project(project));
   }
 
   // Get project summary with latest scan info
   static async findAllWithSummary() {
-    const result = await db.query(`
+    const result = await enhancedDb.query(`
       SELECT 
         p.id,
         p.name,
@@ -148,7 +146,7 @@ class Project {
       throw new Error('No valid fields to update');
     }
 
-    const result = await db.update('projects', updateData, 'id = $1', [this.id]);
+    const result = await enhancedDb.update('projects', updateData, 'id = $1', [this.id]);
     
     if (result) {
       Object.assign(this, result);
@@ -160,7 +158,7 @@ class Project {
 
   // Delete project and all related data
   async delete() {
-    const result = await db.delete('projects', 'id = $1', [this.id]);
+    const result = await enhancedDb.delete('projects', 'id = $1', [this.id]);
     return result.length > 0;
   }
 
@@ -172,7 +170,7 @@ class Project {
 
   // Get the latest completed scan
   async getLatestScan() {
-    const result = await db.query(`
+    const result = await enhancedDb.query(`
       SELECT * FROM scans 
       WHERE project_id = $1 AND status = 'completed'
       ORDER BY completed_at DESC 
@@ -209,7 +207,7 @@ class Project {
 
   // Search projects by name or path
   static async search(query, limit = 20) {
-    const result = await db.query(`
+    const result = await enhancedDb.query(`
       SELECT *, 
         ts_rank(to_tsvector('english', name || ' ' || COALESCE(description, '')), plainto_tsquery('english', $1)) as rank
       FROM projects 
@@ -227,7 +225,7 @@ class Project {
 
   // Get project statistics
   async getStatistics() {
-    const result = await db.query(`
+    const result = await enhancedDb.query(`
       SELECT 
         COUNT(s.id) as total_scans,
         COUNT(CASE WHEN s.status = 'completed' THEN 1 END) as completed_scans,

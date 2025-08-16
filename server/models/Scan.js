@@ -1,4 +1,4 @@
-import db from '../services/database.js';
+import enhancedDb from '../services/enhancedDatabase.js';
 
 class Scan {
   constructor(data = {}) {
@@ -27,7 +27,7 @@ class Scan {
       throw new Error('Project ID is required');
     }
 
-    const result = await db.insert('scans', {
+    const result = await enhancedDb.insert('scans', {
       project_id,
       started_at: new Date(),
       status,
@@ -55,7 +55,7 @@ class Scan {
 
   // Find scan by ID
   static async findById(id) {
-    const scans = await db.select('scans', 'id = $1', [id]);
+    const scans = await enhancedDb.select('scans', { where: 'id = $1', whereParams: [id] });
     if (scans.length === 0) return null;
     
     const scan = this.parseJsonFields(scans[0]);
@@ -64,13 +64,12 @@ class Scan {
 
   // Find scans by project ID
   static async findByProjectId(projectId, limit = 10) {
-    const scans = await db.select(
-      'scans',
-      'project_id = $1',
-      [projectId],
-      'started_at DESC',
-      limit
-    );
+    const scans = await enhancedDb.select('scans', {
+      where: 'project_id = $1',
+      whereParams: [projectId],
+      orderBy: 'started_at DESC',
+      limit: limit
+    });
 
     return scans.map(scan => {
       // Parse JSON fields only if they are strings
@@ -94,7 +93,7 @@ class Scan {
 
   // Get recent scans across all projects
   static async findRecent(limit = 20) {
-    const result = await db.query(`
+    const result = await enhancedDb.query(`
       SELECT 
         s.*,
         p.name as project_name,
@@ -166,7 +165,7 @@ class Scan {
       updateData.completed_at = new Date();
     }
 
-    const result = await db.update('scans', updateData, 'id = $1', [this.id]);
+    const result = await enhancedDb.update('scans', updateData, 'id = $1', [this.id]);
     
     if (result) {
       // Parse JSON fields for the instance only if they are strings
@@ -279,7 +278,7 @@ class Scan {
       file.type || this.getFileType(file.filePath || file.path)
     ]);
 
-    await db.query(`
+    await enhancedDb.query(`
       INSERT INTO files (scan_id, file_path, file_size, lines_of_code, complexity, file_type)
       VALUES ${values}
     `, params);
@@ -304,7 +303,7 @@ class Scan {
       conflict.suggestion || null
     ]);
 
-    await db.query(`
+    await enhancedDb.query(`
       INSERT INTO conflicts (scan_id, file_path, conflict_type, severity, line_number, message, suggestion)
       VALUES ${values}
     `, params);
@@ -327,7 +326,7 @@ class Scan {
       dep.circular || false
     ]);
 
-    await db.query(`
+    await enhancedDb.query(`
       INSERT INTO dependencies (scan_id, from_file, to_file, dependency_type, is_circular)
       VALUES ${values}
     `, params);
@@ -353,7 +352,7 @@ class Scan {
       typeof value
     ]);
 
-    await db.query(`
+    await enhancedDb.query(`
       INSERT INTO metrics (scan_id, metric_name, metric_value, metric_type)
       VALUES ${values}
     `, params);
@@ -393,10 +392,10 @@ class Scan {
   // Get full scan details with related data
   async getFullDetails() {
     const [files, conflicts, dependencies, metrics] = await Promise.all([
-      db.select('files', 'scan_id = $1', [this.id]),
-      db.select('conflicts', 'scan_id = $1', [this.id], 'severity DESC, created_at ASC'),
-      db.select('dependencies', 'scan_id = $1', [this.id]),
-      db.select('metrics', 'scan_id = $1', [this.id])
+      enhancedDb.select('files', { where: 'scan_id = $1', whereParams: [this.id] }),
+      enhancedDb.select('conflicts', { where: 'scan_id = $1', whereParams: [this.id], orderBy: 'severity DESC, created_at ASC' }),
+      enhancedDb.select('dependencies', { where: 'scan_id = $1', whereParams: [this.id] }),
+      enhancedDb.select('metrics', { where: 'scan_id = $1', whereParams: [this.id] })
     ]);
 
     return {
@@ -429,7 +428,7 @@ class Scan {
 
   // Delete scan and all related data
   async delete() {
-    const result = await db.delete('scans', 'id = $1', [this.id]);
+    const result = await enhancedDb.delete('scans', 'id = $1', [this.id]);
     return result.length > 0;
   }
 }
