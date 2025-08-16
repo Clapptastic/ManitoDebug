@@ -5,9 +5,13 @@
   "description": "Advanced code analysis and debugging tool",
   "main": "index.js",
   "scripts": {
+    "predev": "npm run ensure-setup",
     "dev": "concurrently --kill-others-on-fail --prefix \"[{name}]\" --names \"server,client\" \"npm run dev:server\" \"npm run dev:client\"",
     "dev:client": "cd client && npm run dev",
     "dev:server": "cd server && npm run dev",
+    "ensure-setup": "node scripts/ensure-fullstack-setup.js",
+    "setup": "node scripts/setup-fullstack.js",
+    "postinstall": "npm run ensure-setup",
     "build": "npm run build:client && npm run build:server",
     "build:client": "cd client && npm run build",
     "build:server": "cd server && npm run build",
@@ -15,10 +19,10 @@
     "test:core": "cd core && npm test",
     "test:client": "cd client && npm test",
     "test:server": "cd server && npm test",
+    "test:dynamic-ports": "node scripts/test-dynamic-port-management.js",
+    "test:e2e": "node scripts/e2e-test-suite.js",
     "start": "cd server && npm start",
     "install:all": "npm install && cd client && npm install && cd ../server && npm install && cd ../core && npm install",
-    "setup": "node scripts/setup-fullstack.js",
-    "test:e2e": "node scripts/e2e-test-suite.js",
     "start:fullstack": "./start-fullstack.sh"
   },
   "keywords": [
