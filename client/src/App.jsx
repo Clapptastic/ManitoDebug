@@ -34,7 +34,7 @@ const queryClient = new QueryClient({
 })
 
 function AppContent() {
-  const [scanPath, setScanPath] = useState('./src')
+  const [scanPath, setScanPath] = useState('/Users/andrewclapp/Desktop/ai debug planning/manito-package/client/src')
   const [isScanning, setIsScanning] = useState(false)
   const [scanResults, setScanResults] = useState(null)
   const [selectedTab, setSelectedTab] = useState('graph')
@@ -44,17 +44,19 @@ function AppContent() {
   const { toast } = useToast()
 
   // WebSocket connection for real-time updates
-  const { isConnected, lastMessage } = useWebSocket('ws://localhost:3000')
+  const { isConnected, lastMessage } = useWebSocket('ws://localhost:3001')
 
   // Health check query
   const { data: healthData } = useQuery({
     queryKey: ['health'],
     queryFn: async () => {
-      const response = await fetch('/api/health')
+      const response = await fetch('http://localhost:3001/api/health')
       return response.json()
     },
     refetchInterval: 30000, // 30 seconds
   })
+
+  // Removed permanent welcome toast notification
 
   // Handle keyboard shortcuts
   useEffect(() => {
@@ -145,12 +147,7 @@ function AppContent() {
       setIsScanning(true)
       setScanProgress({ stage: 'initializing', progress: 0, files: 0 })
       
-      const loadingToastId = toast.loading(`Scanning ${scanPath}...`, { 
-        title: 'Code Analysis Started',
-        progress: 0
-      })
-      
-      const response = await fetch('/api/scan', {
+      const response = await fetch('http://localhost:3001/api/scan', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -188,6 +185,94 @@ function AppContent() {
     }
   }
 
+  const handleUpload = async (file, projectName) => {
+    try {
+      setIsScanning(true)
+      setScanProgress({ stage: 'uploading', progress: 0, files: 0 })
+      
+      const formData = new FormData()
+      formData.append('projectFile', file)
+      formData.append('projectName', projectName || file.name.replace('.zip', ''))
+      formData.append('patterns', JSON.stringify(['**/*.{js,jsx,ts,tsx}']))
+      formData.append('excludePatterns', JSON.stringify(['node_modules/**', 'dist/**', 'build/**', '.git/**']))
+      
+      const response = await fetch('http://localhost:3001/api/upload', {
+        method: 'POST',
+        body: formData
+      })
+      
+      const result = await response.json()
+      if (result.success) {
+        setScanResults(result.data)
+        toast.success(`Project uploaded and analyzed successfully!`, {
+          title: 'Upload Complete',
+          duration: 5000
+        })
+      } else {
+        console.error('Upload failed:', result.error)
+        toast.error(result.error || 'Failed to upload and analyze project', {
+          title: 'Upload Failed'
+        })
+      }
+    } catch (error) {
+      console.error('Upload error:', error)
+      toast.error('Network error occurred during upload', {
+        title: 'Connection Error'
+      })
+    } finally {
+      setIsScanning(false)
+      setScanProgress({ stage: 'finalizing', progress: 100, files: 0 })
+    }
+  }
+
+  const handleBrowseDirectory = async (directoryData, projectName) => {
+    try {
+      setIsScanning(true)
+      setScanProgress({ stage: 'processing', progress: 0, files: directoryData.files.length })
+      
+      const response = await fetch('http://localhost:3001/api/upload-directory', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          projectData: {
+            name: directoryData.name,
+            files: directoryData.files.map(file => ({
+              path: file.path,
+              content: file.content,
+              size: file.size
+            }))
+          },
+          projectName: projectName || directoryData.name,
+          source: 'browser-directory'
+        })
+      })
+      
+      const result = await response.json()
+      if (result.success) {
+        setScanResults(result.data)
+        toast.success(`Directory analyzed successfully!`, {
+          title: 'Analysis Complete',
+          duration: 5000
+        })
+      } else {
+        console.error('Directory analysis failed:', result.error)
+        toast.error(result.error || 'Failed to analyze directory', {
+          title: 'Analysis Failed'
+        })
+      }
+    } catch (error) {
+      console.error('Directory analysis error:', error)
+      toast.error('Network error occurred during directory analysis', {
+        title: 'Connection Error'
+      })
+    } finally {
+      setIsScanning(false)
+      setScanProgress({ stage: 'finalizing', progress: 100, files: 0 })
+    }
+  }
+
   const fetchScanResults = async () => {
     // This would normally fetch existing scan results by ID
     // For now, we'll use mock data
@@ -214,8 +299,11 @@ function AppContent() {
           scanPath={scanPath}
           setScanPath={setScanPath}
           onScan={handleScan}
+          onUpload={handleUpload}
+          onBrowseDirectory={handleBrowseDirectory}
           isScanning={isScanning}
           scanResults={scanResults}
+          onOpenSettings={() => setShowSettings(true)}
         />
         
         <main className="flex-1 flex flex-col overflow-hidden">

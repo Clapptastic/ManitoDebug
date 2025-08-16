@@ -63,9 +63,23 @@ function Tooltip({
     if (left + tooltip.width > viewport.width - 8) {
       left = viewport.width - tooltip.width - 8
     }
-    if (top < 8) top = trigger.bottom + 8
+    if (top < 8) {
+      // If tooltip would go above viewport, try to position it below the trigger
+      if (trigger.bottom + tooltip.height + 8 <= viewport.height) {
+        top = trigger.bottom + 8
+      } else {
+        // If it still doesn't fit, position it at the top with some margin
+        top = 8
+      }
+    }
     if (top + tooltip.height > viewport.height - 8) {
-      top = trigger.top - tooltip.height - 8
+      // If tooltip would go below viewport, try to position it above the trigger
+      if (trigger.top - tooltip.height - 8 >= 0) {
+        top = trigger.top - tooltip.height - 8
+      } else {
+        // If it still doesn't fit, position it at the bottom with some margin
+        top = viewport.height - tooltip.height - 8
+      }
     }
 
     setTooltipPosition({ top, left })
@@ -117,7 +131,7 @@ function Tooltip({
         <div
           ref={tooltipRef}
           className={`
-            fixed z-50 px-3 py-2 text-sm text-white 
+            fixed z-[9999] px-3 py-2 text-sm text-white 
             bg-gray-900/95 border border-gray-700/50 
             rounded-lg shadow-lg backdrop-blur-sm
             pointer-events-none animate-fade-in
@@ -166,7 +180,7 @@ export const HelpTooltip = ({ content, children, ...props }) => (
     content={content} 
     position="top" 
     delay={200}
-    className="max-w-xs"
+    className="max-w-xs z-[9999]"
     {...props}
   >
     {children || (

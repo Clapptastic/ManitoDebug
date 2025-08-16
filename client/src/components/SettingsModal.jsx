@@ -77,9 +77,19 @@ function SettingsModal({ isOpen, onClose }) {
     
     // AI Settings
     aiProvider: 'local',
-    aiApiKey: '',
+    aiApiKeys: {
+      openai: '',
+      anthropic: '',
+      google: '',
+      custom: ''
+    },
     enableAIInsights: true,
-    aiResponseLength: 'medium'
+    aiResponseLength: 'medium',
+    aiModelPreferences: {
+      openai: 'gpt-3.5-turbo',
+      anthropic: 'claude-3-haiku-20240307',
+      google: 'gemini-pro'
+    }
   })
 
   const [hasChanges, setHasChanges] = useState(false)
@@ -146,9 +156,19 @@ function SettingsModal({ isOpen, onClose }) {
       encryptLocalData: true,
       shareAnalytics: false,
       aiProvider: 'local',
-      aiApiKey: '',
+      aiApiKeys: {
+        openai: '',
+        anthropic: '',
+        google: '',
+        custom: ''
+      },
       enableAIInsights: true,
-      aiResponseLength: 'medium'
+      aiResponseLength: 'medium',
+      aiModelPreferences: {
+        openai: 'gpt-3.5-turbo',
+        anthropic: 'claude-3-haiku-20240307',
+        google: 'gemini-pro'
+      }
     }
     
     setSettings(defaultSettings)
@@ -652,7 +672,7 @@ function SettingsModal({ isOpen, onClose }) {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-2">
-              AI Provider
+              Default AI Provider
               <HelpTooltip content="Choose your preferred AI provider for code analysis" />
             </label>
             <select
@@ -684,21 +704,163 @@ function SettingsModal({ isOpen, onClose }) {
           </div>
         </div>
 
-        {settings.aiProvider !== 'local' && (
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
-              API Key
-              <HelpTooltip content="API key for your chosen AI provider. Stored locally and encrypted." />
-            </label>
-            <input
-              type="password"
-              value={settings.aiApiKey}
-              onChange={(e) => handleSettingChange('aiApiKey', e.target.value)}
-              placeholder="Enter your API key..."
-              className="input-field w-full"
-            />
+        {/* API Keys Section */}
+        <div className="space-y-4">
+          <h4 className="text-md font-medium text-white">API Keys</h4>
+          <p className="text-sm text-gray-400">
+            Configure API keys for your preferred AI providers. Keys are stored locally and encrypted.
+          </p>
+          
+          <div className="space-y-3">
+            {/* OpenAI */}
+            <div className="bg-gray-800/50 rounded-lg p-4 border border-gray-700/50">
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-sm font-medium text-gray-300">OpenAI GPT</label>
+                <span className="text-xs text-gray-500">
+                  {settings.aiApiKeys.openai ? '✓ Configured' : 'Not configured'}
+                </span>
+              </div>
+              <input
+                type="password"
+                value={settings.aiApiKeys.openai}
+                onChange={(e) => handleSettingChange('aiApiKeys', {
+                  ...settings.aiApiKeys,
+                  openai: e.target.value
+                })}
+                placeholder="sk-..."
+                className="input-field w-full text-sm"
+              />
+              <div className="flex items-center justify-between mt-2">
+                <select
+                  value={settings.aiModelPreferences.openai}
+                  onChange={(e) => handleSettingChange('aiModelPreferences', {
+                    ...settings.aiModelPreferences,
+                    openai: e.target.value
+                  })}
+                  className="input-field text-xs w-32"
+                >
+                  <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
+                  <option value="gpt-4">GPT-4</option>
+                  <option value="gpt-4-turbo">GPT-4 Turbo</option>
+                </select>
+                <a 
+                  href="https://platform.openai.com/api-keys" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="text-xs text-blue-400 hover:text-blue-300"
+                >
+                  Get API Key →
+                </a>
+              </div>
+            </div>
+
+            {/* Anthropic */}
+            <div className="bg-gray-800/50 rounded-lg p-4 border border-gray-700/50">
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-sm font-medium text-gray-300">Anthropic Claude</label>
+                <span className="text-xs text-gray-500">
+                  {settings.aiApiKeys.anthropic ? '✓ Configured' : 'Not configured'}
+                </span>
+              </div>
+              <input
+                type="password"
+                value={settings.aiApiKeys.anthropic}
+                onChange={(e) => handleSettingChange('aiApiKeys', {
+                  ...settings.aiApiKeys,
+                  anthropic: e.target.value
+                })}
+                placeholder="sk-ant-..."
+                className="input-field w-full text-sm"
+              />
+              <div className="flex items-center justify-between mt-2">
+                <select
+                  value={settings.aiModelPreferences.anthropic}
+                  onChange={(e) => handleSettingChange('aiModelPreferences', {
+                    ...settings.aiModelPreferences,
+                    anthropic: e.target.value
+                  })}
+                  className="input-field text-xs w-32"
+                >
+                  <option value="claude-3-haiku-20240307">Claude 3 Haiku</option>
+                  <option value="claude-3-sonnet-20240229">Claude 3 Sonnet</option>
+                  <option value="claude-3-opus-20240229">Claude 3 Opus</option>
+                </select>
+                <a 
+                  href="https://console.anthropic.com/" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="text-xs text-blue-400 hover:text-blue-300"
+                >
+                  Get API Key →
+                </a>
+              </div>
+            </div>
+
+            {/* Google Gemini */}
+            <div className="bg-gray-800/50 rounded-lg p-4 border border-gray-700/50">
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-sm font-medium text-gray-300">Google Gemini</label>
+                <span className="text-xs text-gray-500">
+                  {settings.aiApiKeys.google ? '✓ Configured' : 'Not configured'}
+                </span>
+              </div>
+              <input
+                type="password"
+                value={settings.aiApiKeys.google}
+                onChange={(e) => handleSettingChange('aiApiKeys', {
+                  ...settings.aiApiKeys,
+                  google: e.target.value
+                })}
+                placeholder="AIza..."
+                className="input-field w-full text-sm"
+              />
+              <div className="flex items-center justify-between mt-2">
+                <select
+                  value={settings.aiModelPreferences.google}
+                  onChange={(e) => handleSettingChange('aiModelPreferences', {
+                    ...settings.aiModelPreferences,
+                    google: e.target.value
+                  })}
+                  className="input-field text-xs w-32"
+                >
+                  <option value="gemini-pro">Gemini Pro</option>
+                  <option value="gemini-pro-vision">Gemini Pro Vision</option>
+                </select>
+                <a 
+                  href="https://makersuite.google.com/app/apikey" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="text-xs text-blue-400 hover:text-blue-300"
+                >
+                  Get API Key →
+                </a>
+              </div>
+            </div>
+
+            {/* Custom Endpoint */}
+            <div className="bg-gray-800/50 rounded-lg p-4 border border-gray-700/50">
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-sm font-medium text-gray-300">Custom Endpoint</label>
+                <span className="text-xs text-gray-500">
+                  {settings.aiApiKeys.custom ? '✓ Configured' : 'Not configured'}
+                </span>
+              </div>
+              <input
+                type="password"
+                value={settings.aiApiKeys.custom}
+                onChange={(e) => handleSettingChange('aiApiKeys', {
+                  ...settings.aiApiKeys,
+                  custom: e.target.value
+                })}
+                placeholder="Custom API key or endpoint URL"
+                className="input-field w-full text-sm"
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                For custom AI endpoints or other providers
+              </p>
+            </div>
           </div>
-        )}
+        </div>
         
         <div className="space-y-3">
           <label className="flex items-center justify-between">
@@ -722,7 +884,7 @@ function SettingsModal({ isOpen, onClose }) {
               <h4 className="text-sm font-semibold text-blue-400 mb-1">AI Analysis</h4>
               <p className="text-xs text-gray-300">
                 When enabled, code snippets are sent to your chosen AI provider for enhanced analysis. 
-                Review your provider's privacy policy before enabling.
+                Review your provider's privacy policy before enabling. API keys are stored locally and encrypted.
               </p>
             </div>
           </div>

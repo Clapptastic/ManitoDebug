@@ -12,13 +12,25 @@ import {
   RefreshCw,
   Zap,
   Clock,
-  HardDrive
+  HardDrive,
+  Upload,
+  Archive,
+  Folder
 } from 'lucide-react'
+import { selectDirectory, isFileSystemAccessSupported, createUploadFormData } from '../utils/fileSystemAccess'
 import Tooltip, { HelpTooltip, KeyboardTooltip } from './Tooltip'
 
-function Sidebar({ scanPath, setScanPath, onScan, isScanning, scanResults }) {
+function Sidebar({ scanPath, setScanPath, onScan, onUpload, onBrowseDirectory, isScanning, scanResults, onOpenSettings }) {
   const [isDragOver, setIsDragOver] = useState(false)
+  const [inputMode, setInputMode] = useState(() => {
+    // Default to browse mode if File System Access API is supported
+    return isFileSystemAccessSupported() ? 'browse' : 'path'
+  }) // 'path', 'upload', or 'browse'
+  const [uploadFile, setUploadFile] = useState(null)
+  const [selectedDirectory, setSelectedDirectory] = useState(null)
+  const [projectName, setProjectName] = useState('')
   const fileInputRef = useRef(null)
+  const zipInputRef = useRef(null)
 
   const handleDragOver = (e) => {
     e.preventDefault()
@@ -35,10 +47,20 @@ function Sidebar({ scanPath, setScanPath, onScan, isScanning, scanResults }) {
     setIsDragOver(false)
     
     const files = Array.from(e.dataTransfer.files)
-    if (files.length > 0 && files[0].webkitGetAsEntry) {
-      const entry = files[0].webkitGetAsEntry()
-      if (entry && entry.isDirectory) {
-        setScanPath(files[0].path)
+    if (files.length > 0) {
+      const file = files[0]
+      if (file.name.endsWith('.zip')) {
+        // Handle zip file drop for upload mode
+        setInputMode('upload')
+        setUploadFile(file)
+        setProjectName(file.name.replace('.zip', ''))
+      } else if (file.webkitGetAsEntry) {
+        // Handle folder drop for path mode
+        const entry = file.webkitGetAsEntry()
+        if (entry && entry.isDirectory) {
+          setInputMode('path')
+          setScanPath(file.path)
+        }
       }
     }
   }
@@ -52,7 +74,47 @@ function Sidebar({ scanPath, setScanPath, onScan, isScanning, scanResults }) {
   const handleFileChange = (e) => {
     const files = Array.from(e.target.files)
     if (files.length > 0) {
-      setScanPath(files[0].webkitRelativePath.split('/')[0])
+      // Get the root folder name from the relative path
+      const firstFile = files[0]
+      if (firstFile.webkitRelativePath) {
+        const folderName = firstFile.webkitRelativePath.split('/')[0]
+        setScanPath(folderName)
+        setInputMode('path')
+      } else {
+        // Fallback for single file selection
+        setScanPath(firstFile.name)
+        setInputMode('path')
+      }
+    }
+  }
+
+  const handleZipSelect = () => {
+    if (zipInputRef.current) {
+      zipInputRef.current.click()
+    }
+  }
+
+  const handleZipChange = (e) => {
+    const files = Array.from(e.target.files)
+    if (files.length > 0) {
+      const file = files[0]
+      setUploadFile(file)
+      setProjectName(file.name.replace(/\.(zip|tar|tar\.gz)$/, ''))
+      setInputMode('upload')
+    }
+  }
+
+  const handleBrowseDirectory = async () => {
+    try {
+      const directoryData = await selectDirectory()
+      if (directoryData) {
+        setSelectedDirectory(directoryData)
+        setProjectName(directoryData.name)
+        setInputMode('browse')
+      }
+    } catch (error) {
+      console.error('Failed to select directory:', error)
+      // Could show a toast error here
     }
   }
 
@@ -73,7 +135,7 @@ function Sidebar({ scanPath, setScanPath, onScan, isScanning, scanResults }) {
   }
 
   return (
-    <aside className="w-80 glass-panel m-4 mr-0 flex flex-col overflow-hidden">
+    <aside className="w-80 glass-panel m-4 mr-0 flex flex-col overflow-visible relative">
       {/* Header */}
       <div className="p-6 border-b border-gray-700/50">
         <div className="flex items-center justify-between mb-4">
@@ -82,44 +144,165 @@ function Sidebar({ scanPath, setScanPath, onScan, isScanning, scanResults }) {
             <span>Code Scanner</span>
           </h2>
           <HelpTooltip content="Configure scan settings and analysis options">
-            <button className="p-2 rounded-lg hover:bg-gray-700/50 transition-colors focus:ring-2 focus:ring-blue-500/50 focus:outline-none">
+            <button 
+              onClick={onOpenSettings}
+              className="p-2 rounded-lg hover:bg-gray-700/50 transition-colors focus:ring-2 focus:ring-blue-500/50 focus:outline-none"
+            >
               <Settings className="w-4 h-4 text-gray-400" />
             </button>
           </HelpTooltip>
         </div>
 
-        {/* Path Input */}
-        <div className="space-y-3">
-          <label className="text-sm font-medium text-gray-300 flex items-center space-x-2">
-            <span>Project Path</span>
-            <HelpTooltip content="Enter the path to your project directory or drag & drop a folder below" />
-          </label>
-          <div className="relative">
-            <input
-              type="text"
-              value={scanPath}
-              onChange={(e) => setScanPath(e.target.value)}
-              placeholder="Enter project path..."
-              className="input-field w-full pr-12 font-mono text-sm focus:ring-2 focus:ring-primary-500/50"
-            />
-            <Tooltip content="Browse for folder" position="top">
+        {/* Mode Selector */}
+        <div className="mb-4">
+          <div className="grid grid-cols-3 gap-1 rounded-lg bg-gray-800/50 p-1">
+            {isFileSystemAccessSupported() && (
               <button
-                onClick={handleFolderSelect}
-                className="absolute right-2 top-1/2 transform -translate-y-1/2 p-1 rounded hover:bg-gray-600/50 transition-colors focus:ring-2 focus:ring-blue-500/50 focus:outline-none"
+                onClick={() => setInputMode('browse')}
+                className={`px-2 py-2 text-xs font-medium rounded-md transition-all flex items-center justify-center space-x-1 ${
+                  inputMode === 'browse'
+                    ? 'bg-primary-600 text-white shadow-sm'
+                    : 'text-gray-400 hover:text-gray-300 hover:bg-gray-700/50'
+                }`}
               >
-                <FolderOpen className="w-4 h-4 text-gray-400" />
+                <Folder className="w-3 h-3" />
+                <span>Browse</span>
               </button>
-            </Tooltip>
-            <input
-              ref={fileInputRef}
-              type="file"
-              onChange={handleFileChange}
-              style={{ display: 'none' }}
-              webkitdirectory=""
-              directory=""
-            />
+            )}
+            <button
+              onClick={() => setInputMode('upload')}
+              className={`px-2 py-2 text-xs font-medium rounded-md transition-all flex items-center justify-center space-x-1 ${
+                inputMode === 'upload'
+                  ? 'bg-primary-600 text-white shadow-sm'
+                  : 'text-gray-400 hover:text-gray-300 hover:bg-gray-700/50'
+              }`}
+            >
+              <Archive className="w-3 h-3" />
+              <span>Upload</span>
+            </button>
+            <button
+              onClick={() => setInputMode('path')}
+              className={`px-2 py-2 text-xs font-medium rounded-md transition-all flex items-center justify-center space-x-1 ${
+                inputMode === 'path'
+                  ? 'bg-primary-600 text-white shadow-sm'
+                  : 'text-gray-400 hover:text-gray-300 hover:bg-gray-700/50'
+              }`}
+            >
+              <FolderOpen className="w-3 h-3" />
+              <span>Path</span>
+            </button>
           </div>
         </div>
+
+        {inputMode === 'browse' ? (
+          /* Browse Mode */
+          <div className="space-y-3">
+            <label className="text-sm font-medium text-gray-300 flex items-center space-x-2">
+              <span>Browse Local Directory</span>
+              <HelpTooltip content="Select a local directory using your browser's directory picker" />
+            </label>
+            <div className="space-y-2">
+              <input
+                type="text"
+                value={projectName}
+                onChange={(e) => setProjectName(e.target.value)}
+                placeholder="Project name..."
+                className="input-field w-full text-sm focus:ring-2 focus:ring-primary-500/50"
+              />
+              <div className="relative">
+                <input
+                  type="text"
+                  value={selectedDirectory ? `${selectedDirectory.name} (${selectedDirectory.files.length} files)` : ''}
+                  placeholder="No directory selected..."
+                  readOnly
+                  className="input-field w-full pr-12 text-sm focus:ring-2 focus:ring-primary-500/50"
+                />
+                <Tooltip content="Browse for directory" position="top">
+                  <button
+                    onClick={handleBrowseDirectory}
+                    className="absolute right-2 top-1/2 transform -translate-y-1/2 p-1 rounded hover:bg-gray-600/50 transition-colors focus:ring-2 focus:ring-blue-500/50 focus:outline-none"
+                  >
+                    <Folder className="w-4 h-4 text-gray-400" />
+                  </button>
+                </Tooltip>
+              </div>
+            </div>
+          </div>
+        ) : inputMode === 'path' ? (
+          /* Path Input Mode */
+          <div className="space-y-3">
+            <label className="text-sm font-medium text-gray-300 flex items-center space-x-2">
+              <span>Project Path</span>
+              <HelpTooltip content="Enter the path to your project directory or drag & drop a folder below" />
+            </label>
+            <div className="relative">
+              <input
+                type="text"
+                value={scanPath}
+                onChange={(e) => setScanPath(e.target.value)}
+                placeholder="Enter project path..."
+                className="input-field w-full pr-12 font-mono text-sm focus:ring-2 focus:ring-primary-500/50"
+              />
+              <Tooltip content="Browse for folder" position="top">
+                <button
+                  onClick={handleFolderSelect}
+                  className="absolute right-2 top-1/2 transform -translate-y-1/2 p-1 rounded hover:bg-gray-600/50 transition-colors focus:ring-2 focus:ring-blue-500/50 focus:outline-none"
+                >
+                  <FolderOpen className="w-4 h-4 text-gray-400" />
+                </button>
+              </Tooltip>
+              <input
+                ref={fileInputRef}
+                type="file"
+                onChange={handleFileChange}
+                style={{ display: 'none' }}
+                webkitdirectory=""
+                directory=""
+              />
+            </div>
+          </div>
+        ) : (
+          /* Upload Mode */
+          <div className="space-y-3">
+            <label className="text-sm font-medium text-gray-300 flex items-center space-x-2">
+              <span>Upload Project</span>
+              <HelpTooltip content="Upload a zip file containing your project" />
+            </label>
+            <div className="space-y-2">
+              <input
+                type="text"
+                value={projectName}
+                onChange={(e) => setProjectName(e.target.value)}
+                placeholder="Project name..."
+                className="input-field w-full text-sm focus:ring-2 focus:ring-primary-500/50"
+              />
+              <div className="relative">
+                <input
+                  type="text"
+                  value={uploadFile ? uploadFile.name : ''}
+                  placeholder="No file selected..."
+                  readOnly
+                  className="input-field w-full pr-12 text-sm focus:ring-2 focus:ring-primary-500/50"
+                />
+                <Tooltip content="Select zip file" position="top">
+                  <button
+                    onClick={handleZipSelect}
+                    className="absolute right-2 top-1/2 transform -translate-y-1/2 p-1 rounded hover:bg-gray-600/50 transition-colors focus:ring-2 focus:ring-blue-500/50 focus:outline-none"
+                  >
+                    <Archive className="w-4 h-4 text-gray-400" />
+                  </button>
+                </Tooltip>
+                <input
+                  ref={zipInputRef}
+                  type="file"
+                  accept=".zip"
+                  onChange={handleZipChange}
+                  style={{ display: 'none' }}
+                />
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Drag & Drop Zone */}
         <div
@@ -131,30 +314,68 @@ function Sidebar({ scanPath, setScanPath, onScan, isScanning, scanResults }) {
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
+          onClick={inputMode === 'browse' ? handleBrowseDirectory : inputMode === 'path' ? handleFolderSelect : handleZipSelect}
         >
-          <div className="text-center">
-            <FolderOpen className="w-8 h-8 text-gray-400 mx-auto mb-2" />
-            <p className="text-sm text-gray-400">
-              Drag & drop a folder here
-            </p>
-            <p className="text-xs text-gray-500 mt-1">
-              or click to browse
-            </p>
+          <div className="text-center cursor-pointer">
+            {inputMode === 'browse' ? (
+              <>
+                <Folder className="w-8 h-8 text-gray-400 mx-auto mb-2" />
+                <p className="text-sm text-gray-400">
+                  Click to browse local directory
+                </p>
+                <p className="text-xs text-gray-500 mt-1">
+                  Modern browsers • Direct access
+                </p>
+              </>
+            ) : inputMode === 'path' ? (
+              <>
+                <FolderOpen className="w-8 h-8 text-gray-400 mx-auto mb-2" />
+                <p className="text-sm text-gray-400">
+                  Drop folder or click to browse
+                </p>
+                <p className="text-xs text-gray-500 mt-1">
+                  Local dev: use absolute paths
+                </p>
+              </>
+            ) : (
+              <>
+                <Archive className="w-8 h-8 text-gray-400 mx-auto mb-2" />
+                <p className="text-sm text-gray-400">
+                  Drop zip file or click to browse
+                </p>
+                <p className="text-xs text-gray-500 mt-1">
+                  Max 50MB • Zip format only
+                </p>
+              </>
+            )}
           </div>
         </div>
 
         {/* Scan Button */}
         <KeyboardTooltip 
           shortcut="Cmd+Enter" 
-          description={isScanning ? "Scanning in progress..." : "Start code analysis"}
+          description={isScanning ? "Scanning in progress..." : 
+            inputMode === 'browse' ? "Analyze selected directory" :
+            inputMode === 'upload' ? "Upload and analyze project" : 
+            "Start code analysis"}
         >
           <button
-            onClick={onScan}
-            disabled={isScanning || !scanPath}
+            onClick={
+              inputMode === 'browse' ? () => onBrowseDirectory(selectedDirectory, projectName) :
+              inputMode === 'upload' ? () => onUpload(uploadFile, projectName) : 
+              onScan
+            }
+            disabled={isScanning || (
+              inputMode === 'browse' ? !selectedDirectory :
+              inputMode === 'path' ? !scanPath : 
+              !uploadFile
+            )}
             className={`w-full mt-4 flex items-center justify-center space-x-2 py-3 px-4 rounded-lg font-medium transition-all duration-200 focus:ring-2 focus:ring-primary-500/50 focus:outline-none ${
               isScanning
                 ? 'bg-gray-600 text-gray-300 cursor-not-allowed'
-                : !scanPath
+                : (inputMode === 'browse' ? !selectedDirectory :
+                   inputMode === 'path' ? !scanPath : 
+                   !uploadFile)
                 ? 'bg-gray-700 text-gray-400 cursor-not-allowed'
                 : 'btn-primary hover:shadow-lg hover:shadow-primary-500/20 transform hover:scale-[1.02]'
             }`}
@@ -163,6 +384,16 @@ function Sidebar({ scanPath, setScanPath, onScan, isScanning, scanResults }) {
               <>
                 <Loader2 className="w-4 h-4 animate-spin" />
                 <span>Scanning...</span>
+              </>
+            ) : inputMode === 'browse' ? (
+              <>
+                <Folder className="w-4 h-4" />
+                <span>Analyze Directory</span>
+              </>
+            ) : inputMode === 'upload' ? (
+              <>
+                <Upload className="w-4 h-4" />
+                <span>Upload & Analyze</span>
               </>
             ) : (
               <>
@@ -285,7 +516,7 @@ function Sidebar({ scanPath, setScanPath, onScan, isScanning, scanResults }) {
       <div className="flex-1 overflow-hidden">
         <div className="p-6">
           <h3 className="text-sm font-semibold text-gray-300 mb-3">Recent Files</h3>
-          <div className="space-y-2 overflow-y-auto max-h-64">
+          <div className="space-y-2 overflow-y-auto max-h-64 overflow-x-hidden">
             {scanResults?.files?.slice(0, 10).map((file, index) => (
               <div
                 key={index}
