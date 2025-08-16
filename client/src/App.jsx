@@ -138,7 +138,7 @@ function AppContent() {
         }
       }
     }
-  }, [lastMessage, toast])
+  }, [lastMessage])
 
   const handleScan = async () => {
     try {

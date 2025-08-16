@@ -38,6 +38,8 @@ function GraphVisualization({ data }) {
     d3.select(svgRef.current).selectAll('*').remove()
 
     const container = containerRef.current
+    if (!container) return
+    
     const containerRect = container.getBoundingClientRect()
     const width = containerRect.width
     const height = containerRect.height
