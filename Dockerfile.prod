@@ -1,0 +1,120 @@
+# Production-optimized multi-stage Dockerfile for Manito Application
+FROM node:18-alpine AS base
+
+# Install security updates and essential tools
+RUN apk update && apk upgrade && \
+    apk add --no-cache \
+    libc6-compat \
+    curl \
+    tini \
+    dumb-init
+
+# Create app directory and user for security
+RUN addgroup --system --gid 1001 nodejs && \
+    adduser --system --uid 1001 --ingroup nodejs appuser
+
+WORKDIR /app
+RUN chown -R appuser:nodejs /app
+
+# Install dependencies stage
+FROM base AS deps
+USER appuser
+WORKDIR /app
+
+# Copy package files with proper ownership
+COPY --chown=appuser:nodejs package*.json ./
+COPY --chown=appuser:nodejs core/package*.json ./core/
+COPY --chown=appuser:nodejs server/package*.json ./server/
+COPY --chown=appuser:nodejs client/package*.json ./client/
+COPY --chown=appuser:nodejs cli/package*.json ./cli/
+
+# Install production dependencies with security audit
+RUN npm ci --only=production --legacy-peer-deps --no-optional && \
+    npm audit --audit-level moderate && \
+    npm cache clean --force
+
+# Build stage
+FROM base AS builder
+USER appuser
+WORKDIR /app
+
+# Copy dependencies and source code
+COPY --from=deps --chown=appuser:nodejs /app/node_modules ./node_modules
+COPY --chown=appuser:nodejs . .
+
+# Build the client application with production optimizations
+WORKDIR /app/client
+RUN npm run build
+
+# Core library build (if needed)
+WORKDIR /app/core
+RUN npm run build 2>/dev/null || echo "No build script for core"
+
+# Final production stage
+FROM base AS production
+USER root
+
+# Install additional production tools
+RUN apk add --no-cache \
+    postgresql-client \
+    redis
+
+USER appuser
+WORKDIR /app
+
+# Set production environment
+ENV NODE_ENV=production
+ENV NODE_OPTIONS="--max-old-space-size=1536"
+ENV UV_THREADPOOL_SIZE=8
+
+# Copy built application with proper ownership
+COPY --from=builder --chown=appuser:nodejs /app/package*.json ./
+COPY --from=builder --chown=appuser:nodejs /app/core ./core
+COPY --from=builder --chown=appuser:nodejs /app/server ./server
+COPY --from=builder --chown=appuser:nodejs /app/cli ./cli
+COPY --from=builder --chown=appuser:nodejs /app/client/dist ./client/dist
+COPY --from=deps --chown=appuser:nodejs /app/node_modules ./node_modules
+
+# Create necessary directories
+RUN mkdir -p /app/logs /app/tmp /app/scan-workspace && \
+    chown -R appuser:nodejs /app/logs /app/tmp /app/scan-workspace
+
+# Copy production scripts
+COPY --chown=appuser:nodejs scripts/ ./scripts/
+
+# Health check script
+COPY --chown=appuser:nodejs <<EOF /app/healthcheck.js
+const http = require('http');
+const options = {
+  hostname: 'localhost',
+  port: process.env.PORT || 3000,
+  path: '/api/health',
+  method: 'GET',
+  timeout: 5000
+};
+
+const req = http.request(options, (res) => {
+  if (res.statusCode === 200) {
+    process.exit(0);
+  } else {
+    process.exit(1);
+  }
+});
+
+req.on('error', () => process.exit(1));
+req.on('timeout', () => process.exit(1));
+req.end();
+EOF
+
+# Expose port
+EXPOSE 3000
+
+# Add health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+  CMD node /app/healthcheck.js
+
+# Security: Use tini as PID 1 for proper signal handling
+ENTRYPOINT ["/sbin/tini", "--"]
+
+# Production startup command with graceful shutdown
+CMD ["dumb-init", "node", "server/app.js"]

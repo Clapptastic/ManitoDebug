@@ -1,15 +1,16 @@
 export default {
+  preset: 'ts-jest/presets/default-esm',
   projects: [
     {
       displayName: 'server',
       rootDir: './server',
       testMatch: ['<rootDir>/tests/**/*.test.js'],
       testEnvironment: 'node',
-      transform: {
-        '^.+\\.js$': ['babel-jest', {
-          presets: [['@babel/preset-env', { targets: { node: 'current' } }]]
-        }]
-      },
+      preset: 'ts-jest/presets/default-esm',
+      transform: {},
+      transformIgnorePatterns: [
+        'node_modules/(?!(chalk|ora|boxen|commander|@manito)/)'
+      ],
       moduleNameMapper: {
         '^@manito/core$': '<rootDir>/../core/index.js'
       },
@@ -20,11 +21,11 @@ export default {
       rootDir: './core',
       testMatch: ['<rootDir>/tests/**/*.test.js'],
       testEnvironment: 'node',
-      transform: {
-        '^.+\\.js$': ['babel-jest', {
-          presets: [['@babel/preset-env', { targets: { node: 'current' } }]]
-        }]
-      },
+      preset: 'ts-jest/presets/default-esm',
+      transform: {},
+      transformIgnorePatterns: [
+        'node_modules/(?!(acorn|acorn-walk|glob)/)'
+      ],
       setupFilesAfterEnv: ['<rootDir>/tests/setup.js']
     },
     {
@@ -35,11 +36,17 @@ export default {
       transform: {
         '^.+\\.(js|jsx|ts|tsx)$': ['babel-jest', {
           presets: [
-            ['@babel/preset-env', { targets: { node: 'current' } }],
+            ['@babel/preset-env', { 
+              targets: { node: 'current' },
+              modules: 'auto'
+            }],
             ['@babel/preset-react', { runtime: 'automatic' }]
           ]
         }]
       },
+      transformIgnorePatterns: [
+        'node_modules/(?!(d3|d3-.*|lucide-react)/)'
+      ],
       moduleNameMapper: {
         '\\.(css|less|scss)$': 'identity-obj-proxy'
       },
@@ -50,11 +57,11 @@ export default {
       rootDir: './cli',
       testMatch: ['<rootDir>/tests/**/*.test.js'],
       testEnvironment: 'node',
-      transform: {
-        '^.+\\.js$': ['babel-jest', {
-          presets: [['@babel/preset-env', { targets: { node: 'current' } }]]
-        }]
-      },
+      preset: 'ts-jest/presets/default-esm',
+      transform: {},
+      transformIgnorePatterns: [
+        'node_modules/(?!(chalk|ora|boxen|commander|@manito)/)'
+      ],
       setupFilesAfterEnv: ['<rootDir>/tests/setup.js']
     }
   ],

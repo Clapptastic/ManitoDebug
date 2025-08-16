@@ -249,8 +249,28 @@ export class CodeScanner {
       const deps = this.dependencyGraph.get(node);
       if (deps) {
         for (const dep of deps) {
+          // Only check relative dependencies (local files)
           if (!dep.startsWith('.') && !dep.startsWith('/')) continue;
-          dfs(dep, pathArray);
+          
+          // Resolve the dependency path relative to the current file
+          let resolvedDep = dep;
+          if (dep.startsWith('./')) {
+            // Find the file that would match this dependency
+            const currentDir = path.dirname(node);
+            const targetFile = path.resolve(currentDir, dep);
+            
+            // Check if this resolved path exists in our dependency graph
+            for (const graphNode of this.dependencyGraph.keys()) {
+              if (graphNode === targetFile || 
+                  graphNode.endsWith(dep.slice(2)) || // Remove ./
+                  path.basename(graphNode) === path.basename(dep)) {
+                resolvedDep = graphNode;
+                break;
+              }
+            }
+          }
+          
+          dfs(resolvedDep, [...pathArray]);
         }
       }
 
@@ -268,23 +288,31 @@ export class CodeScanner {
   }
 
   calculateComplexity(node) {
+    if (!node || !node.body) {
+      return 1;
+    }
+    
     let complexity = 1;
     
-    walk(node, {
-      IfStatement: () => complexity++,
-      WhileStatement: () => complexity++,
-      ForStatement: () => complexity++,
-      ForInStatement: () => complexity++,
-      ForOfStatement: () => complexity++,
-      SwitchCase: () => complexity++,
-      CatchClause: () => complexity++,
-      ConditionalExpression: () => complexity++,
-      LogicalExpression: (node) => {
-        if (node.operator === '&&' || node.operator === '||') {
-          complexity++;
+    try {
+      walk(node.body, {
+        IfStatement: () => complexity++,
+        WhileStatement: () => complexity++,
+        ForStatement: () => complexity++,
+        ForInStatement: () => complexity++,
+        ForOfStatement: () => complexity++,
+        SwitchCase: () => complexity++,
+        CatchClause: () => complexity++,
+        ConditionalExpression: () => complexity++,
+        LogicalExpression: (logicalNode) => {
+          if (logicalNode.operator === '&&' || logicalNode.operator === '||') {
+            complexity++;
+          }
         }
-      }
-    });
+      });
+    } catch (error) {
+      console.warn('Error calculating complexity:', error.message);
+    }
     
     return complexity;
   }

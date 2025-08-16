@@ -18,6 +18,10 @@ import GraphVisualization from './components/GraphVisualization'
 import MetricsPanel from './components/MetricsPanel'
 import ConflictsList from './components/ConflictsList'
 import AIPanel from './components/AIPanel'
+import SettingsModal from './components/SettingsModal'
+import { ToastProvider, useToast } from './components/Toast'
+import { ScanningLoader, LoadingOverlay } from './components/Loading'
+import Tooltip from './components/Tooltip'
 import useWebSocket from './hooks/useWebSocket'
 
 const queryClient = new QueryClient({
@@ -35,6 +39,9 @@ function AppContent() {
   const [scanResults, setScanResults] = useState(null)
   const [selectedTab, setSelectedTab] = useState('graph')
   const [showAIPanel, setShowAIPanel] = useState(false)
+  const [showSettings, setShowSettings] = useState(false)
+  const [scanProgress, setScanProgress] = useState({ stage: 'initializing', progress: 0, files: 0 })
+  const { toast } = useToast()
 
   // WebSocket connection for real-time updates
   const { isConnected, lastMessage } = useWebSocket('ws://localhost:3000')
@@ -49,6 +56,53 @@ function AppContent() {
     refetchInterval: 30000, // 30 seconds
   })
 
+  // Handle keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      // Settings shortcut (Cmd/Ctrl + ,)
+      if ((e.metaKey || e.ctrlKey) && e.key === ',') {
+        e.preventDefault()
+        setShowSettings(true)
+        return
+      }
+      
+      // AI shortcut (Alt + A)
+      if (e.altKey && e.key === 'a') {
+        e.preventDefault()
+        setShowAIPanel(!showAIPanel)
+        return
+      }
+      
+      // Start scan shortcut (Cmd/Ctrl + Enter)
+      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter' && scanPath && !isScanning) {
+        e.preventDefault()
+        handleScan()
+        return
+      }
+      
+      // Escape to close modals
+      if (e.key === 'Escape') {
+        if (showSettings) {
+          setShowSettings(false)
+        } else if (showAIPanel) {
+          setShowAIPanel(false)
+        }
+        return
+      }
+      
+      // Tab navigation (1-4 for tabs)
+      if ((e.metaKey || e.ctrlKey) && ['1', '2', '3', '4'].includes(e.key) && scanResults) {
+        e.preventDefault()
+        const tabMap = { '1': 'graph', '2': 'metrics', '3': 'conflicts', '4': 'files' }
+        setSelectedTab(tabMap[e.key])
+        return
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [showSettings, showAIPanel, scanPath, isScanning, scanResults])
+
   // Handle WebSocket messages
   useEffect(() => {
     if (lastMessage) {
@@ -58,21 +112,44 @@ function AppContent() {
       if (message.channel === 'scan') {
         if (message.data.status === 'started') {
           setIsScanning(true)
+          setScanProgress({ stage: 'initializing', progress: 0, files: 0 })
+          toast.loading('Starting code analysis...', { title: 'Scanning' })
+        } else if (message.data.status === 'progress') {
+          setScanProgress({
+            stage: message.data.stage || 'analyzing',
+            progress: message.data.progress || 0,
+            files: message.data.filesProcessed || 0
+          })
         } else if (message.data.status === 'completed') {
           setIsScanning(false)
+          setScanProgress({ stage: 'finalizing', progress: 100, files: message.data.filesProcessed || 0 })
+          toast.scanComplete({ 
+            files: message.data.filesProcessed || 0, 
+            conflicts: message.data.conflicts || 0 
+          })
           // Refresh scan results
           fetchScanResults()
         } else if (message.data.status === 'failed') {
           setIsScanning(false)
           console.error('Scan failed:', message.data.error)
+          toast.error(`Scan failed: ${message.data.error}`, { 
+            title: 'Scan Error' 
+          })
         }
       }
     }
-  }, [lastMessage])
+  }, [lastMessage, toast])
 
   const handleScan = async () => {
     try {
       setIsScanning(true)
+      setScanProgress({ stage: 'initializing', progress: 0, files: 0 })
+      
+      const loadingToastId = toast.loading(`Scanning ${scanPath}...`, { 
+        title: 'Code Analysis Started',
+        progress: 0
+      })
+      
       const response = await fetch('/api/scan', {
         method: 'POST',
         headers: {
@@ -90,13 +167,24 @@ function AppContent() {
       const result = await response.json()
       if (result.success) {
         setScanResults(result.data)
+        toast.scanComplete({
+          files: result.data.files?.length || 0,
+          conflicts: result.data.conflicts?.length || 0
+        })
       } else {
         console.error('Scan failed:', result.error)
+        toast.error(result.error || 'Failed to scan project', {
+          title: 'Scan Failed'
+        })
       }
     } catch (error) {
       console.error('Scan error:', error)
+      toast.error('Network error occurred while scanning', {
+        title: 'Connection Error'
+      })
     } finally {
       setIsScanning(false)
+      setScanProgress({ stage: 'finalizing', progress: 100, files: 0 })
     }
   }
 
@@ -113,12 +201,14 @@ function AppContent() {
   ]
 
   return (
-    <div className="h-screen bg-gray-950 flex flex-col overflow-hidden">
-      <Header 
-        isConnected={isConnected} 
-        healthData={healthData}
-        onToggleAI={() => setShowAIPanel(!showAIPanel)}
-      />
+    <ToastProvider>
+      <div className="h-screen bg-gray-950 flex flex-col overflow-hidden">
+        <Header 
+          isConnected={isConnected} 
+          healthData={healthData}
+          onToggleAI={() => setShowAIPanel(!showAIPanel)}
+          onOpenSettings={() => setShowSettings(true)}
+        />
       
       <div className="flex flex-1 overflow-hidden">
         <Sidebar 
@@ -133,25 +223,39 @@ function AppContent() {
           {/* Toolbar */}
           <div className="glass-panel m-4 p-4 flex items-center justify-between">
             <div className="flex space-x-4">
-              {tabConfig.map(({ id, label, icon: Icon }) => (
-                <button
-                  key={id}
-                  onClick={() => setSelectedTab(id)}
-                  className={`flex items-center space-x-2 px-4 py-2 rounded-lg transition-colors ${
-                    selectedTab === id 
-                      ? 'bg-primary-600 text-white' 
-                      : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800'
-                  }`}
-                >
-                  <Icon className="w-4 h-4" />
-                  <span>{label}</span>
-                  {id === 'conflicts' && scanResults?.conflicts?.length > 0 && (
-                    <span className="bg-red-500 text-white text-xs px-2 py-1 rounded-full">
-                      {scanResults.conflicts.length}
-                    </span>
-                  )}
-                </button>
-              ))}
+              {tabConfig.map(({ id, label, icon: Icon }, index) => {
+                const shortcutNumber = index + 1
+                return (
+                  <Tooltip 
+                    key={id}
+                    content={
+                      <div className="text-center">
+                        <div className="font-semibold">{label}</div>
+                        <div className="text-xs text-gray-300 mt-1">
+                          Press ⌘{shortcutNumber} to switch
+                        </div>
+                      </div>
+                    }
+                  >
+                    <button
+                      onClick={() => setSelectedTab(id)}
+                      className={`flex items-center space-x-2 px-4 py-2 rounded-lg transition-colors focus:ring-2 focus:ring-primary-500/50 focus:outline-none ${
+                        selectedTab === id 
+                          ? 'bg-primary-600 text-white' 
+                          : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800'
+                      }`}
+                    >
+                      <Icon className="w-4 h-4" />
+                      <span>{label}</span>
+                      {id === 'conflicts' && scanResults?.conflicts?.length > 0 && (
+                        <span className="bg-red-500 text-white text-xs px-2 py-1 rounded-full">
+                          {scanResults.conflicts.length}
+                        </span>
+                      )}
+                    </button>
+                  </Tooltip>
+                )
+              })}
             </div>
             
             <div className="flex items-center space-x-2">
@@ -170,7 +274,15 @@ function AppContent() {
           {/* Main Content Area */}
           <div className="flex-1 px-4 pb-4 overflow-hidden">
             <div className="glass-panel h-full p-4 overflow-auto">
-              {!scanResults ? (
+              {isScanning ? (
+                <div className="flex items-center justify-center h-full">
+                  <ScanningLoader 
+                    stage={scanProgress.stage}
+                    progress={scanProgress.progress}
+                    files={scanProgress.files}
+                  />
+                </div>
+              ) : !scanResults ? (
                 <div className="flex items-center justify-center h-full text-center">
                   <div className="space-y-4">
                     <Network className="w-16 h-16 text-gray-600 mx-auto" />
@@ -226,7 +338,13 @@ function AppContent() {
           />
         )}
       </div>
+      
+      <SettingsModal 
+        isOpen={showSettings}
+        onClose={() => setShowSettings(false)}
+      />
     </div>
+    </ToastProvider>
   )
 }
 

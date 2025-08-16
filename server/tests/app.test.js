@@ -142,8 +142,8 @@ describe('WebSocket functionality', () => {
     }
   });
 
-  it('should handle WebSocket connections', (done) => {
-    const WebSocket = require('ws');
+  it('should handle WebSocket connections', async (done) => {
+    const WebSocket = (await import('ws')).default;
     client = new WebSocket('ws://localhost:3000');
     
     client.on('open', () => {
@@ -161,8 +161,8 @@ describe('WebSocket functionality', () => {
     client.on('error', done);
   });
 
-  it('should handle ping/pong messages', (done) => {
-    const WebSocket = require('ws');
+  it('should handle ping/pong messages', async (done) => {
+    const WebSocket = (await import('ws')).default;
     client = new WebSocket('ws://localhost:3000');
     
     client.on('open', () => {

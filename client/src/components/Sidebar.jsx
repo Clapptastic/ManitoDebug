@@ -14,6 +14,7 @@ import {
   Clock,
   HardDrive
 } from 'lucide-react'
+import Tooltip, { HelpTooltip, KeyboardTooltip } from './Tooltip'
 
 function Sidebar({ scanPath, setScanPath, onScan, isScanning, scanResults }) {
   const [isDragOver, setIsDragOver] = useState(false)
@@ -80,28 +81,35 @@ function Sidebar({ scanPath, setScanPath, onScan, isScanning, scanResults }) {
             <Zap className="w-5 h-5 text-primary-400" />
             <span>Code Scanner</span>
           </h2>
-          <button className="p-2 rounded-lg hover:bg-gray-700/50 transition-colors">
-            <Settings className="w-4 h-4 text-gray-400" />
-          </button>
+          <HelpTooltip content="Configure scan settings and analysis options">
+            <button className="p-2 rounded-lg hover:bg-gray-700/50 transition-colors focus:ring-2 focus:ring-blue-500/50 focus:outline-none">
+              <Settings className="w-4 h-4 text-gray-400" />
+            </button>
+          </HelpTooltip>
         </div>
 
         {/* Path Input */}
         <div className="space-y-3">
-          <label className="text-sm font-medium text-gray-300">Project Path</label>
+          <label className="text-sm font-medium text-gray-300 flex items-center space-x-2">
+            <span>Project Path</span>
+            <HelpTooltip content="Enter the path to your project directory or drag & drop a folder below" />
+          </label>
           <div className="relative">
             <input
               type="text"
               value={scanPath}
               onChange={(e) => setScanPath(e.target.value)}
               placeholder="Enter project path..."
-              className="input-field w-full pr-12 font-mono text-sm"
+              className="input-field w-full pr-12 font-mono text-sm focus:ring-2 focus:ring-primary-500/50"
             />
-            <button
-              onClick={handleFolderSelect}
-              className="absolute right-2 top-1/2 transform -translate-y-1/2 p-1 rounded hover:bg-gray-600/50 transition-colors"
-            >
-              <FolderOpen className="w-4 h-4 text-gray-400" />
-            </button>
+            <Tooltip content="Browse for folder" position="top">
+              <button
+                onClick={handleFolderSelect}
+                className="absolute right-2 top-1/2 transform -translate-y-1/2 p-1 rounded hover:bg-gray-600/50 transition-colors focus:ring-2 focus:ring-blue-500/50 focus:outline-none"
+              >
+                <FolderOpen className="w-4 h-4 text-gray-400" />
+              </button>
+            </Tooltip>
             <input
               ref={fileInputRef}
               type="file"
@@ -136,27 +144,34 @@ function Sidebar({ scanPath, setScanPath, onScan, isScanning, scanResults }) {
         </div>
 
         {/* Scan Button */}
-        <button
-          onClick={onScan}
-          disabled={isScanning || !scanPath}
-          className={`w-full mt-4 flex items-center justify-center space-x-2 py-3 px-4 rounded-lg font-medium transition-all duration-200 ${
-            isScanning
-              ? 'bg-gray-600 text-gray-300 cursor-not-allowed'
-              : 'btn-primary hover:shadow-lg hover:shadow-primary-500/20'
-          }`}
+        <KeyboardTooltip 
+          shortcut="Cmd+Enter" 
+          description={isScanning ? "Scanning in progress..." : "Start code analysis"}
         >
-          {isScanning ? (
-            <>
-              <Loader2 className="w-4 h-4 animate-spin" />
-              <span>Scanning...</span>
-            </>
-          ) : (
-            <>
-              <Play className="w-4 h-4" />
-              <span>Start Analysis</span>
-            </>
-          )}
-        </button>
+          <button
+            onClick={onScan}
+            disabled={isScanning || !scanPath}
+            className={`w-full mt-4 flex items-center justify-center space-x-2 py-3 px-4 rounded-lg font-medium transition-all duration-200 focus:ring-2 focus:ring-primary-500/50 focus:outline-none ${
+              isScanning
+                ? 'bg-gray-600 text-gray-300 cursor-not-allowed'
+                : !scanPath
+                ? 'bg-gray-700 text-gray-400 cursor-not-allowed'
+                : 'btn-primary hover:shadow-lg hover:shadow-primary-500/20 transform hover:scale-[1.02]'
+            }`}
+          >
+            {isScanning ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                <span>Scanning...</span>
+              </>
+            ) : (
+              <>
+                <Play className="w-4 h-4" />
+                <span>Start Analysis</span>
+              </>
+            )}
+          </button>
+        </KeyboardTooltip>
       </div>
 
       {/* Scan Results Summary */}
@@ -171,53 +186,75 @@ function Sidebar({ scanPath, setScanPath, onScan, isScanning, scanResults }) {
           </div>
 
           <div className="grid grid-cols-2 gap-3">
-            <div className="metric-card">
-              <div className="flex items-center space-x-2">
-                <FileText className="w-4 h-4 text-blue-400" />
-                <div>
-                  <div className="text-sm font-semibold text-white">
-                    {formatFileCount(scanResults.files?.length || 0)}
+            <Tooltip content={`${scanResults.files?.length || 0} files analyzed`} position="top">
+              <div className="metric-card hover:bg-gray-800/50 transition-colors cursor-help">
+                <div className="flex items-center space-x-2">
+                  <FileText className="w-4 h-4 text-blue-400" />
+                  <div>
+                    <div className="text-sm font-semibold text-white">
+                      {formatFileCount(scanResults.files?.length || 0)}
+                    </div>
+                    <div className="text-xs text-gray-400">Files</div>
                   </div>
-                  <div className="text-xs text-gray-400">Files</div>
                 </div>
               </div>
-            </div>
+            </Tooltip>
 
-            <div className="metric-card">
-              <div className="flex items-center space-x-2">
-                <BarChart3 className="w-4 h-4 text-green-400" />
-                <div>
-                  <div className="text-sm font-semibold text-white">
-                    {scanResults.metrics?.linesOfCode?.toLocaleString() || '0'}
+            <Tooltip content={`${scanResults.metrics?.linesOfCode?.toLocaleString() || 0} lines of code analyzed`} position="top">
+              <div className="metric-card hover:bg-gray-800/50 transition-colors cursor-help">
+                <div className="flex items-center space-x-2">
+                  <BarChart3 className="w-4 h-4 text-green-400" />
+                  <div>
+                    <div className="text-sm font-semibold text-white">
+                      {scanResults.metrics?.linesOfCode?.toLocaleString() || '0'}
+                    </div>
+                    <div className="text-xs text-gray-400">Lines</div>
                   </div>
-                  <div className="text-xs text-gray-400">Lines</div>
                 </div>
               </div>
-            </div>
+            </Tooltip>
 
-            <div className="metric-card">
-              <div className="flex items-center space-x-2">
-                <AlertTriangle className="w-4 h-4 text-yellow-400" />
-                <div>
-                  <div className="text-sm font-semibold text-white">
-                    {scanResults.conflicts?.length || 0}
+            <Tooltip 
+              content={
+                scanResults.conflicts?.length > 0 
+                  ? `${scanResults.conflicts.length} conflicts detected - click to view details`
+                  : "No conflicts found - great job!"
+              } 
+              position="top"
+            >
+              <div className={`metric-card hover:bg-gray-800/50 transition-colors cursor-help ${
+                scanResults.conflicts?.length > 0 ? 'ring-1 ring-yellow-500/20' : ''
+              }`}>
+                <div className="flex items-center space-x-2">
+                  <AlertTriangle className={`w-4 h-4 ${
+                    scanResults.conflicts?.length > 0 ? 'text-yellow-400' : 'text-gray-500'
+                  }`} />
+                  <div>
+                    <div className="text-sm font-semibold text-white">
+                      {scanResults.conflicts?.length || 0}
+                    </div>
+                    <div className="text-xs text-gray-400">Conflicts</div>
                   </div>
-                  <div className="text-xs text-gray-400">Conflicts</div>
                 </div>
               </div>
-            </div>
+            </Tooltip>
 
-            <div className="metric-card">
-              <div className="flex items-center space-x-2">
-                <HardDrive className="w-4 h-4 text-purple-400" />
-                <div>
-                  <div className="text-sm font-semibold text-white">
-                    {formatSize(scanResults.files?.reduce((acc, f) => acc + (f.size || 0), 0) || 0)}
+            <Tooltip 
+              content={`Total codebase size: ${formatSize(scanResults.files?.reduce((acc, f) => acc + (f.size || 0), 0) || 0)}`} 
+              position="top"
+            >
+              <div className="metric-card hover:bg-gray-800/50 transition-colors cursor-help">
+                <div className="flex items-center space-x-2">
+                  <HardDrive className="w-4 h-4 text-purple-400" />
+                  <div>
+                    <div className="text-sm font-semibold text-white">
+                      {formatSize(scanResults.files?.reduce((acc, f) => acc + (f.size || 0), 0) || 0)}
+                    </div>
+                    <div className="text-xs text-gray-400">Size</div>
                   </div>
-                  <div className="text-xs text-gray-400">Size</div>
                 </div>
               </div>
-            </div>
+            </Tooltip>
           </div>
 
           {/* Health Score */}

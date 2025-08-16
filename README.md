@@ -15,6 +15,30 @@ ManitoDebug is a comprehensive code analysis platform that combines AST parsing,
 - 🔧 **VS Code Extension** - Integrated development experience
 - 🖥️ **CLI Tools** - Automation and CI/CD integration
 - 🧪 **Comprehensive Testing** - Jest-based testing framework
+- 🎮 **Interactive Development** - Smart CLI for easy setup and deployment
+
+## 🚀 Quick Start
+
+Get ManitoDebug running in seconds with our interactive launcher:
+
+```bash
+# Clone the repository
+git clone <your-repo-url> manito-debug
+cd manito-debug
+
+# Install dependencies
+npm install
+
+# Launch interactive development environment
+npm run dev
+```
+
+The interactive CLI will guide you through choosing the perfect development setup:
+- 💻 **Local Development** - Fast local setup with hot reloading
+- 🐳 **Docker Development** - Full containerized environment with database
+- ⚙️ **Custom Options** - Advanced configurations for specific needs
+
+For detailed instructions, see [QUICK_START.md](QUICK_START.md).
 
 ## 🏗️ Architecture
 
@@ -110,8 +134,13 @@ CLIENT_URL=http://localhost:5173
 NODE_ENV=development
 
 # AI provider settings (optional)
-AI_PROVIDER=local
-AI_API_KEY=your_api_key_here
+# OpenAI Configuration
+OPENAI_API_KEY=your-openai-api-key-here
+OPENAI_MODEL=gpt-3.5-turbo
+
+# Anthropic Configuration  
+ANTHROPIC_API_KEY=your-anthropic-api-key-here
+ANTHROPIC_MODEL=claude-3-haiku-20240307
 ```
 
 ### VS Code Extension

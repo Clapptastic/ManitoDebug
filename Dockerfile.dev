@@ -1,45 +1,90 @@
 # Development Dockerfile for Manito Application
-FROM node:18-alpine
+FROM node:20-alpine
 
-# Install system dependencies
+# Install system dependencies and development tools
 RUN apk add --no-cache \
     git \
     curl \
     bash \
     vim \
-    libc6-compat
+    nano \
+    htop \
+    tree \
+    jq \
+    libc6-compat \
+    python3 \
+    make \
+    g++ \
+    && rm -rf /var/cache/apk/*
 
 WORKDIR /app
 
-# Copy package files
-COPY package.json package-lock.json* ./
-COPY core/package.json ./core/
-COPY server/package.json ./server/
-COPY client/package.json ./client/
-COPY cli/package.json ./cli/
+# Install global development tools
+RUN npm install -g \
+    nodemon \
+    concurrently \
+    @vscode/vsce \
+    eslint \
+    prettier \
+    typescript \
+    ts-node
 
-# Install dependencies with legacy peer deps
-RUN npm install --legacy-peer-deps
-
-# Copy source code
+# Copy source code first to avoid postinstall script issues
 COPY . .
 
-# Create development directories
-RUN mkdir -p /app/scan-workspace /app/logs
+# Install dependencies with legacy peer deps and development optimizations
+RUN npm ci --legacy-peer-deps --include=dev --fund=false --audit=false
 
-# Install development tools globally
-RUN npm install -g nodemon concurrently
+# Create development directories with proper permissions
+RUN mkdir -p \
+    /app/scan-workspace \
+    /app/logs \
+    /app/.cache \
+    /app/coverage \
+    /app/client/.vite \
+    /tmp/manito-dev
+
+# Create non-root user for development
+RUN addgroup -g 1001 -S nodejs && \
+    adduser -S manito -u 1001 -G nodejs
 
 # Set permissions for development
-RUN chown -R node:node /app
-USER node
+RUN chown -R manito:nodejs /app /tmp/manito-dev
 
-# Expose ports
-EXPOSE 3000 5173
+# Switch to non-root user
+USER manito
 
-# Health check for development
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+# Set development environment variables
+ENV NODE_ENV=development
+ENV DEBUG=manito:*
+ENV CHOKIDAR_USEPOLLING=true
+ENV WATCHPACK_POLLING=true
+
+# Expose ports for development
+EXPOSE 3000 5173 9229
+
+# Health check for development with extended timeout
+HEALTHCHECK --interval=30s --timeout=15s --start-period=60s --retries=5 \
     CMD curl -f http://localhost:3000/api/health || exit 1
 
+# Create startup script for development
+RUN echo '#!/bin/bash\n\
+set -e\n\
+\n\
+echo "🚀 Starting ManitoDebug Development Environment"\n\
+echo "📦 Installing/updating dependencies..."\n\
+npm install --legacy-peer-deps\n\
+\n\
+echo "🔧 Running development setup..."\n\
+npm run postinstall\n\
+\n\
+echo "🌟 Starting development servers..."\n\
+echo "   • Server: http://localhost:3000"\n\
+echo "   • Client: http://localhost:5173"\n\
+echo "   • Debugger: http://localhost:9229"\n\
+echo ""\n\
+exec npm run dev\n\
+' > /app/start-dev.sh && chmod +x /app/start-dev.sh
+
 # Default development command
-CMD ["npm", "run", "dev"]
+CMD ["/app/start-dev.sh"]

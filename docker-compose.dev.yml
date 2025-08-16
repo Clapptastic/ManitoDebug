@@ -1,0 +1,164 @@
+version: '3.8'
+
+services:
+  # Main development application
+  manito-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    ports:
+      - "3000:3000"   # Server port
+      - "5173:5173"   # Vite dev server port
+      - "9229:9229"   # Node.js debugger port
+    environment:
+      - NODE_ENV=development
+      - PORT=3000
+      - CLIENT_URL=http://localhost:5173
+      - DEBUG=manito:*
+      - CHOKIDAR_USEPOLLING=true  # For file watching in Docker
+    volumes:
+      # Mount source code for hot reloading
+      - ./server:/app/server:cached
+      - ./client:/app/client:cached
+      - ./core:/app/core:cached
+      - ./cli:/app/cli:cached
+      - ./docs:/app/docs:ro
+      
+      # Mount workspace for scanning projects
+      - ./scan-workspace:/app/scan-workspace:rw
+      
+      # Mount node_modules as volumes for better performance
+      - manito-dev-node-modules:/app/node_modules
+      - manito-dev-server-node-modules:/app/server/node_modules
+      - manito-dev-client-node-modules:/app/client/node_modules
+      - manito-dev-core-node-modules:/app/core/node_modules
+      - manito-dev-cli-node-modules:/app/cli/node_modules
+      
+      # Cache directories
+      - manito-dev-cache:/app/.cache
+      - manito-dev-vite-cache:/app/client/.vite
+    networks:
+      - manito-dev-network
+    depends_on:
+      - redis-dev
+      - postgres-dev
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    restart: unless-stopped
+    stdin_open: true
+    tty: true
+
+  # Development Redis for caching
+  redis-dev:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes --save 20 1
+    volumes:
+      - redis-dev-data:/data
+    networks:
+      - manito-dev-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Development PostgreSQL
+  postgres-dev:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: manito_dev
+      POSTGRES_USER: manito_dev
+      POSTGRES_PASSWORD: manito_dev_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-dev-data:/var/lib/postgresql/data
+      - ./scripts/init-dev.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    networks:
+      - manito-dev-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U manito_dev -d manito_dev"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Development tools container
+  dev-tools:
+    image: node:18-alpine
+    working_dir: /app
+    environment:
+      - NODE_ENV=development
+    volumes:
+      - .:/app:cached
+      - manito-dev-tools-node-modules:/app/node_modules
+    networks:
+      - manito-dev-network
+    command: tail -f /dev/null  # Keep container running
+    profiles:
+      - tools
+
+  # File watcher for tests (optional)
+  test-runner:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    working_dir: /app
+    environment:
+      - NODE_ENV=test
+      - CI=true
+    volumes:
+      - ./server:/app/server:cached
+      - ./client:/app/client:cached
+      - ./core:/app/core:cached
+      - ./cli:/app/cli:cached
+      - manito-test-node-modules:/app/node_modules
+      - ./coverage:/app/coverage:rw
+    command: npm run test:watch
+    networks:
+      - manito-dev-network
+    profiles:
+      - testing
+    stdin_open: true
+    tty: true
+
+volumes:
+  # Development node_modules volumes for better performance
+  manito-dev-node-modules:
+    driver: local
+  manito-dev-server-node-modules:
+    driver: local
+  manito-dev-client-node-modules:
+    driver: local
+  manito-dev-core-node-modules:
+    driver: local
+  manito-dev-cli-node-modules:
+    driver: local
+  manito-dev-tools-node-modules:
+    driver: local
+  manito-test-node-modules:
+    driver: local
+  
+  # Cache volumes
+  manito-dev-cache:
+    driver: local
+  manito-dev-vite-cache:
+    driver: local
+    
+  # Data volumes
+  redis-dev-data:
+    driver: local
+  postgres-dev-data:
+    driver: local
+
+networks:
+  manito-dev-network:
+    driver: bridge
+    name: manito-dev-network
