@@ -1,4 +1,4 @@
-import db from './database.js';
+import enhancedDb from './enhancedDatabase.js';
 import winston from 'winston';
 
 const logger = winston.createLogger({
@@ -23,7 +23,7 @@ const migrations = [
     id: '001_initial_schema',
     description: 'Create initial database schema',
     up: async () => {
-      await db.query(`
+      await enhancedDb.query(`
         CREATE TABLE IF NOT EXISTS projects (
           id SERIAL PRIMARY KEY,
           user_id INTEGER,
@@ -37,7 +37,7 @@ const migrations = [
         )
       `);
 
-      await db.query(`
+      await enhancedDb.query(`
         CREATE TABLE IF NOT EXISTS scans (
           id SERIAL PRIMARY KEY,
           project_id INTEGER REFERENCES projects(id) ON DELETE CASCADE,
@@ -52,7 +52,7 @@ const migrations = [
         )
       `);
 
-      await db.query(`
+      await enhancedDb.query(`
         CREATE TABLE IF NOT EXISTS files (
           id SERIAL PRIMARY KEY,
           project_id INTEGER REFERENCES projects(id) ON DELETE CASCADE,
@@ -65,7 +65,7 @@ const migrations = [
         )
       `);
 
-      await db.query(`
+      await enhancedDb.query(`
         CREATE TABLE IF NOT EXISTS dependencies (
           id SERIAL PRIMARY KEY,
           project_id INTEGER REFERENCES projects(id) ON DELETE CASCADE,
@@ -77,7 +77,7 @@ const migrations = [
         )
       `);
 
-      await db.query(`
+      await enhancedDb.query(`
         CREATE TABLE IF NOT EXISTS conflicts (
           id SERIAL PRIMARY KEY,
           project_id INTEGER REFERENCES projects(id) ON DELETE CASCADE,
@@ -90,7 +90,7 @@ const migrations = [
         )
       `);
 
-      await db.query(`
+      await enhancedDb.query(`
         CREATE TABLE IF NOT EXISTS users (
           id SERIAL PRIMARY KEY,
           email VARCHAR(255) UNIQUE NOT NULL,
@@ -101,7 +101,7 @@ const migrations = [
         )
       `);
 
-      await db.query(`
+      await enhancedDb.query(`
         CREATE TABLE IF NOT EXISTS cache (
           cache_key VARCHAR(255) PRIMARY KEY,
           cache_value TEXT NOT NULL,
@@ -116,7 +116,7 @@ const migrations = [
     description: 'Add semantic search capabilities',
     up: async () => {
       // Create search_logs table
-      await db.query(`
+      await enhancedDb.query(`
         CREATE TABLE IF NOT EXISTS search_logs (
           id SERIAL PRIMARY KEY,
           query TEXT NOT NULL,
@@ -129,71 +129,71 @@ const migrations = [
       `);
 
       // Create indexes for search_logs
-      await db.query(`
+      await enhancedDb.query(`
         CREATE INDEX IF NOT EXISTS idx_search_logs_query ON search_logs USING GIN(to_tsvector('english', query))
       `);
 
-      await db.query(`
+      await enhancedDb.query(`
         CREATE INDEX IF NOT EXISTS idx_search_logs_user_id ON search_logs(user_id)
       `);
 
-      await db.query(`
+      await enhancedDb.query(`
         CREATE INDEX IF NOT EXISTS idx_search_logs_created_at ON search_logs(created_at)
       `);
 
       // Add full-text search indexes to existing tables
-      await db.query(`
+      await enhancedDb.query(`
         CREATE INDEX IF NOT EXISTS idx_projects_name_fts ON projects USING GIN(to_tsvector('english', name))
       `);
 
-      await db.query(`
+      await enhancedDb.query(`
         CREATE INDEX IF NOT EXISTS idx_projects_description_fts ON projects USING GIN(to_tsvector('english', COALESCE(description, '')))
       `);
 
-      await db.query(`
+      await enhancedDb.query(`
         CREATE INDEX IF NOT EXISTS idx_projects_path_fts ON projects USING GIN(to_tsvector('english', path))
       `);
 
-      await db.query(`
+      await enhancedDb.query(`
         CREATE INDEX IF NOT EXISTS idx_projects_search_composite ON projects USING GIN(
           to_tsvector('english', name || ' ' || COALESCE(description, '') || ' ' || path)
         )
       `);
 
-      await db.query(`
+      await enhancedDb.query(`
         CREATE INDEX IF NOT EXISTS idx_scans_results_fts ON scans USING GIN(to_tsvector('english', results::text))
       `);
 
-      await db.query(`
+      await enhancedDb.query(`
         CREATE INDEX IF NOT EXISTS idx_scans_metadata_fts ON scans USING GIN(to_tsvector('english', metadata::text))
       `);
 
-      await db.query(`
+      await enhancedDb.query(`
         CREATE INDEX IF NOT EXISTS idx_files_content_fts ON files USING GIN(to_tsvector('english', content))
       `);
 
-      await db.query(`
+      await enhancedDb.query(`
         CREATE INDEX IF NOT EXISTS idx_files_path_fts ON files USING GIN(to_tsvector('english', file_path))
       `);
 
-      await db.query(`
+      await enhancedDb.query(`
         CREATE INDEX IF NOT EXISTS idx_dependencies_name_fts ON dependencies USING GIN(to_tsvector('english', name))
       `);
 
-      await db.query(`
+      await enhancedDb.query(`
         CREATE INDEX IF NOT EXISTS idx_dependencies_type_fts ON dependencies USING GIN(to_tsvector('english', type))
       `);
 
-      await db.query(`
+      await enhancedDb.query(`
         CREATE INDEX IF NOT EXISTS idx_conflicts_description_fts ON conflicts USING GIN(to_tsvector('english', description))
       `);
 
-      await db.query(`
+      await enhancedDb.query(`
         CREATE INDEX IF NOT EXISTS idx_conflicts_type_fts ON conflicts USING GIN(to_tsvector('english', type))
       `);
 
       // Create search functions
-      await db.query(`
+      await enhancedDb.query(`
         CREATE OR REPLACE FUNCTION calculate_text_similarity(text1 text, text2 text)
         RETURNS float AS $$
         BEGIN
@@ -202,7 +202,7 @@ const migrations = [
         $$ LANGUAGE plpgsql
       `);
 
-      await db.query(`
+      await enhancedDb.query(`
         CREATE OR REPLACE FUNCTION search_projects(search_query text, user_id integer DEFAULT NULL)
         RETURNS TABLE(
           id integer,
@@ -395,14 +395,14 @@ const migrations = [
         $$ LANGUAGE plpgsql
       `;
       
-      await db.query(globalSearchFunction);
+      await enhancedDb.query(globalSearchFunction);
     }
   },
   {
     id: '003_websocket_enhancements',
     description: 'Add WebSocket connection tracking',
     up: async () => {
-      await db.query(`
+      await enhancedDb.query(`
         CREATE TABLE IF NOT EXISTS websocket_connections (
           id SERIAL PRIMARY KEY,
           client_id VARCHAR(255) UNIQUE NOT NULL,
@@ -416,11 +416,11 @@ const migrations = [
         )
       `);
 
-      await db.query(`
+      await enhancedDb.query(`
         CREATE INDEX IF NOT EXISTS idx_websocket_connections_user_id ON websocket_connections(user_id)
       `);
 
-      await db.query(`
+      await enhancedDb.query(`
         CREATE INDEX IF NOT EXISTS idx_websocket_connections_connected_at ON websocket_connections(connected_at)
       `);
     }
@@ -429,7 +429,7 @@ const migrations = [
 
 // Migration tracking table
 const createMigrationsTable = async () => {
-  await db.query(`
+  await enhancedDb.query(`
     CREATE TABLE IF NOT EXISTS migrations (
       id VARCHAR(255) PRIMARY KEY,
       description TEXT,
@@ -440,7 +440,7 @@ const createMigrationsTable = async () => {
 
 // Get applied migrations
 const getAppliedMigrations = async () => {
-  const result = await db.query('SELECT id FROM migrations ORDER BY applied_at');
+  const result = await enhancedDb.query('SELECT id FROM migrations ORDER BY applied_at');
   return result.rows.map(row => row.id);
 };
 
@@ -450,7 +450,7 @@ const applyMigration = async (migration) => {
     logger.info(`Applying migration: ${migration.id} - ${migration.description}`);
     await migration.up();
     
-    await db.query(
+    await enhancedDb.query(
       'INSERT INTO migrations (id, description) VALUES ($1, $2)',
       [migration.id, migration.description]
     );

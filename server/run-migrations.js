@@ -2,7 +2,7 @@ import migrations from './services/migrations.js';
 
 async function runMigrations() {
   try {
-    console.log('Running database migrations...');
+    console.log('Running database migrations with enhanced database service...');
     await migrations.runMigrations();
     console.log('Migrations completed successfully');
     process.exit(0);

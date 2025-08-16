@@ -14,6 +14,7 @@ import { fileURLToPath } from 'url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 import { CodeScanner } from '@manito/core';
 import aiService from './services/ai.js';
+import enhancedDb from './services/enhancedDatabase.js';
 import Project from './models/Project.js';
 import Scan from './models/Scan.js';
 import User from './models/User.js';
@@ -214,8 +215,8 @@ app.get('/api/health', async (req, res) => {
 
       // Test database connection
       try {
-        await User.findById('health-check-test').catch(() => null);
-        health.services.database = { status: 'ok' };
+        const dbHealth = await enhancedDb.health();
+        health.services.database = dbHealth;
       } catch (error) {
         health.services.database = { 
           status: 'error', 

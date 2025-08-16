@@ -1,4 +1,4 @@
-import db from './database.js';
+import enhancedDb from './enhancedDatabase.js';
 import winston from 'winston';
 
 class SemanticSearchService {
@@ -69,7 +69,7 @@ class SemanticSearchService {
 
     for (const index of indexes) {
       try {
-        await db.query(index);
+        await enhancedDb.query(index);
       } catch (error) {
         // Index might already exist, continue
         this.logger.debug('Index creation skipped (may already exist)', { index: index.substring(0, 50) });
@@ -468,7 +468,7 @@ class SemanticSearchService {
 
     for (const func of functions) {
       try {
-        await db.query(func);
+        await enhancedDb.query(func);
       } catch (error) {
         this.logger.debug('Function creation skipped (may already exist)', { error: error.message });
       }
@@ -478,9 +478,13 @@ class SemanticSearchService {
   // Search methods
   async searchProjects(query, userId = null, limit = 20, offset = 0) {
     try {
-      const result = await db.query(
+      const result = await enhancedDb.query(
         'SELECT * FROM search_projects($1, $2) LIMIT $3 OFFSET $4',
-        [query, userId, limit, offset]
+        [query, userId, limit, offset],
+        {
+          cacheKey: `search_projects_${query}_${userId}_${limit}_${offset}`,
+          cacheTTL: 300
+        }
       );
       
       return {
@@ -497,9 +501,13 @@ class SemanticSearchService {
 
   async searchScanResults(query, projectId = null, limit = 20, offset = 0) {
     try {
-      const result = await db.query(
+      const result = await enhancedDb.query(
         'SELECT * FROM search_scan_results($1, $2) LIMIT $3 OFFSET $4',
-        [query, projectId, limit, offset]
+        [query, projectId, limit, offset],
+        {
+          cacheKey: `search_scan_results_${query}_${projectId}_${limit}_${offset}`,
+          cacheTTL: 300
+        }
       );
       
       return {
@@ -516,9 +524,13 @@ class SemanticSearchService {
 
   async searchFiles(query, projectId = null, limit = 20, offset = 0) {
     try {
-      const result = await db.query(
+      const result = await enhancedDb.query(
         'SELECT * FROM search_files($1, $2) LIMIT $3 OFFSET $4',
-        [query, projectId, limit, offset]
+        [query, projectId, limit, offset],
+        {
+          cacheKey: `search_files_${query}_${projectId}_${limit}_${offset}`,
+          cacheTTL: 300
+        }
       );
       
       return {
@@ -535,9 +547,13 @@ class SemanticSearchService {
 
   async searchDependencies(query, projectId = null, limit = 20, offset = 0) {
     try {
-      const result = await db.query(
+      const result = await enhancedDb.query(
         'SELECT * FROM search_dependencies($1, $2) LIMIT $3 OFFSET $4',
-        [query, projectId, limit, offset]
+        [query, projectId, limit, offset],
+        {
+          cacheKey: `search_dependencies_${query}_${projectId}_${limit}_${offset}`,
+          cacheTTL: 300
+        }
       );
       
       return {
@@ -554,9 +570,13 @@ class SemanticSearchService {
 
   async searchConflicts(query, projectId = null, limit = 20, offset = 0) {
     try {
-      const result = await db.query(
+      const result = await enhancedDb.query(
         'SELECT * FROM search_conflicts($1, $2) LIMIT $3 OFFSET $4',
-        [query, projectId, limit, offset]
+        [query, projectId, limit, offset],
+        {
+          cacheKey: `search_conflicts_${query}_${projectId}_${limit}_${offset}`,
+          cacheTTL: 300
+        }
       );
       
       return {
@@ -573,9 +593,13 @@ class SemanticSearchService {
 
   async globalSearch(query, userId = null, limit = 50) {
     try {
-      const result = await db.query(
+      const result = await enhancedDb.query(
         'SELECT * FROM global_search($1, $2, $3)',
-        [query, userId, limit]
+        [query, userId, limit],
+        {
+          cacheKey: `global_search_${query}_${userId}_${limit}`,
+          cacheTTL: 300
+        }
       );
       
       // Group results by entity type
@@ -677,37 +701,46 @@ class SemanticSearchService {
       const suggestions = [];
       
       // Get project name suggestions
-      const projectSuggestions = await db.query(`
+      const projectSuggestions = await enhancedDb.query(`
         SELECT DISTINCT name, 'project' as type
         FROM projects 
         WHERE (user_id IS NULL OR user_id = $1)
           AND name ILIKE $2
         LIMIT $3
-      `, [userId, `%${query}%`, limit]);
+      `, [userId, `%${query}%`, limit], {
+        cacheKey: `suggestions_projects_${query}_${userId}_${limit}`,
+        cacheTTL: 600
+      });
       
       suggestions.push(...projectSuggestions.rows);
       
       // Get dependency name suggestions
-      const dependencySuggestions = await db.query(`
+      const dependencySuggestions = await enhancedDb.query(`
         SELECT DISTINCT d.name, 'dependency' as type
         FROM dependencies d
         JOIN projects p ON d.project_id = p.id
         WHERE (p.user_id IS NULL OR p.user_id = $1)
           AND d.name ILIKE $2
         LIMIT $3
-      `, [userId, `%${query}%`, limit]);
+      `, [userId, `%${query}%`, limit], {
+        cacheKey: `suggestions_dependencies_${query}_${userId}_${limit}`,
+        cacheTTL: 600
+      });
       
       suggestions.push(...dependencySuggestions.rows);
       
       // Get conflict type suggestions
-      const conflictSuggestions = await db.query(`
+      const conflictSuggestions = await enhancedDb.query(`
         SELECT DISTINCT c.type, 'conflict' as type
         FROM conflicts c
         JOIN projects p ON c.project_id = p.id
         WHERE (p.user_id IS NULL OR p.user_id = $1)
           AND c.type ILIKE $2
         LIMIT $3
-      `, [userId, `%${query}%`, limit]);
+      `, [userId, `%${query}%`, limit], {
+        cacheKey: `suggestions_conflicts_${query}_${userId}_${limit}`,
+        cacheTTL: 600
+      });
       
       suggestions.push(...conflictSuggestions.rows);
       
@@ -721,7 +754,7 @@ class SemanticSearchService {
   // Search analytics
   async getSearchAnalytics(userId = null, days = 30) {
     try {
-      const result = await db.query(`
+      const result = await enhancedDb.query(`
         SELECT 
           DATE(created_at) as search_date,
           COUNT(*) as search_count,
@@ -732,7 +765,10 @@ class SemanticSearchService {
           AND created_at >= NOW() - INTERVAL '${days} days'
         GROUP BY DATE(created_at)
         ORDER BY search_date DESC
-      `, [userId]);
+      `, [userId], {
+        cacheKey: `search_analytics_${userId}_${days}`,
+        cacheTTL: 1800 // 30 minutes
+      });
       
       return result.rows;
     } catch (error) {
@@ -744,7 +780,7 @@ class SemanticSearchService {
   // Log search queries for analytics
   async logSearch(query, userId = null, entityType = null, resultCount = 0) {
     try {
-      await db.query(`
+      await enhancedDb.query(`
         INSERT INTO search_logs (query, user_id, entity_type, result_count, created_at)
         VALUES ($1, $2, $3, $4, NOW())
       `, [query, userId, entityType, resultCount]);
