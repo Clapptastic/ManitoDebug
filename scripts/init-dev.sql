@@ -7,7 +7,7 @@ CREATE EXTENSION IF NOT EXISTS "pg_trgm";
 
 -- Create development schemas
 CREATE SCHEMA IF NOT EXISTS manito_dev;
-SET search_path TO manito_dev;
+SET search_path TO manito_dev, public;
 
 -- Users table
 CREATE TABLE IF NOT EXISTS users (

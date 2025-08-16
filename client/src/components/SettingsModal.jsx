@@ -31,69 +31,19 @@ import {
 } from 'lucide-react'
 import { useToast } from './Toast'
 import Tooltip, { HelpTooltip, KeyboardTooltip } from './Tooltip'
+import { useSettings } from '../contexts/SettingsContext'
 
 function SettingsModal({ isOpen, onClose }) {
   const { toast } = useToast()
+  const { 
+    settings, 
+    hasChanges, 
+    updateSetting, 
+    saveSettings, 
+    resetSettings 
+  } = useSettings()
   const [activeTab, setActiveTab] = useState('general')
   const modalRef = useRef(null)
-  const [settings, setSettings] = useState({
-    // General Settings
-    theme: 'dark',
-    language: 'en',
-    autoSave: true,
-    confirmActions: true,
-    
-    // Appearance
-    fontSize: 'medium',
-    sidebarPosition: 'left',
-    compactMode: false,
-    showLineNumbers: true,
-    colorScheme: 'default',
-    
-    // Notifications
-    enableNotifications: true,
-    soundEnabled: true,
-    scanCompleteNotify: true,
-    errorNotifications: true,
-    updateNotifications: true,
-    
-    // Analysis Settings
-    maxFileSize: 1024 * 1024, // 1MB
-    scanTimeout: 30000, // 30 seconds
-    deepAnalysis: true,
-    trackDependencies: true,
-    detectCircular: true,
-    complexityThreshold: 10,
-    
-    // Performance
-    enableCache: true,
-    maxCacheSize: 100 * 1024 * 1024, // 100MB
-    preloadResults: true,
-    backgroundScanning: false,
-    
-    // Security
-    allowRemoteScanning: false,
-    encryptLocalData: true,
-    shareAnalytics: false,
-    
-    // AI Settings
-    aiProvider: 'local',
-    aiApiKeys: {
-      openai: '',
-      anthropic: '',
-      google: '',
-      custom: ''
-    },
-    enableAIInsights: true,
-    aiResponseLength: 'medium',
-    aiModelPreferences: {
-      openai: 'gpt-3.5-turbo',
-      anthropic: 'claude-3-haiku-20240307',
-      google: 'gemini-pro'
-    }
-  })
-
-  const [hasChanges, setHasChanges] = useState(false)
 
   // Handle click outside to close
   useEffect(() => {
@@ -122,86 +72,10 @@ function SettingsModal({ isOpen, onClose }) {
     }
   }, [isOpen, onClose])
 
-  // Load settings from localStorage on mount
-  useEffect(() => {
-    try {
-      const savedSettings = localStorage.getItem('manito-settings')
-      if (savedSettings) {
-        setSettings(prev => ({ ...prev, ...JSON.parse(savedSettings) }))
-      }
-    } catch (error) {
-      console.warn('Failed to load settings:', error)
-    }
-  }, [])
+
 
   const handleSettingChange = (key, value) => {
-    setSettings(prev => ({ ...prev, [key]: value }))
-    setHasChanges(true)
-  }
-
-  const saveSettings = () => {
-    try {
-      localStorage.setItem('manito-settings', JSON.stringify(settings))
-      setHasChanges(false)
-      toast.success('Settings saved successfully!', {
-        actions: [{
-          label: 'Reload App',
-          onClick: () => window.location.reload()
-        }]
-      })
-    } catch (error) {
-      toast.error('Failed to save settings')
-    }
-  }
-
-  const resetSettings = () => {
-    const defaultSettings = {
-      theme: 'dark',
-      language: 'en',
-      autoSave: true,
-      confirmActions: true,
-      fontSize: 'medium',
-      sidebarPosition: 'left',
-      compactMode: false,
-      showLineNumbers: true,
-      colorScheme: 'default',
-      enableNotifications: true,
-      soundEnabled: true,
-      scanCompleteNotify: true,
-      errorNotifications: true,
-      updateNotifications: true,
-      maxFileSize: 1024 * 1024,
-      scanTimeout: 30000,
-      deepAnalysis: true,
-      trackDependencies: true,
-      detectCircular: true,
-      complexityThreshold: 10,
-      enableCache: true,
-      maxCacheSize: 100 * 1024 * 1024,
-      preloadResults: true,
-      backgroundScanning: false,
-      allowRemoteScanning: false,
-      encryptLocalData: true,
-      shareAnalytics: false,
-      aiProvider: 'local',
-      aiApiKeys: {
-        openai: '',
-        anthropic: '',
-        google: '',
-        custom: ''
-      },
-      enableAIInsights: true,
-      aiResponseLength: 'medium',
-      aiModelPreferences: {
-        openai: 'gpt-3.5-turbo',
-        anthropic: 'claude-3-haiku-20240307',
-        google: 'gemini-pro'
-      }
-    }
-    
-    setSettings(defaultSettings)
-    setHasChanges(true)
-    toast.info('Settings reset to defaults')
+    updateSetting(key, value)
   }
 
   const exportSettings = () => {

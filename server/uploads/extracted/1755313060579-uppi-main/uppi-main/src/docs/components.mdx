@@ -1,0 +1,286 @@
+
+# Component Documentation
+
+This document provides an overview of the key components in the application, their props, and usage examples.
+
+## Table of Contents
+
+- [API Key Components](#api-key-components)
+  - [ApiKeyInput](#apikeyinput)
+  - [ApiKeyStatus](#apikeystatus)
+  - [ApiStatus](#apistatus)
+- [Competitor Analysis Components](#competitor-analysis-components)
+  - [CompetitorAnalysis](#competitoranalysis)
+  - [AnalysisResults](#analysisresults)
+  - [ApiKeyToggleList](#apikeytogglelist)
+- [UI Utility Components](#ui-utility-components)
+  - [ErrorBoundary](#errorboundary)
+  - [DocTooltip](#doctooltip)
+  - [Toaster](#toaster)
+- [Hooks](#hooks)
+  - [useAnalysisContainer](#useanalysiscontainer)
+  - [useApiKeyStatus](#useapikeystatus)
+  - [useCompetitorAnalysis](#usecompetitoranalysis)
+
+## API Key Components
+
+### ApiKeyInput
+
+A component for inputting and saving API keys.
+
+**Props:**
+- `apiKeyType` (string): Type of API key (e.g., 'openai', 'anthropic')
+- `onSave` (function): Function to call when saving the key
+- `defaultValue` (string): Initial value for the input
+- `status` (object): Status information about the key
+
+**Example:**
+```tsx
+<ApiKeyInput 
+  apiKeyType="openai" 
+  onSave={handleSaveKey} 
+  defaultValue="sk-..." 
+  status={apiStatus}
+/>
+```
+
+### ApiKeyStatus
+
+Displays the status of an API key.
+
+**Props:**
+- `keyType` (string): Type of API key
+- `status` (object): Status information about the key
+- `className` (string): Additional CSS classes
+
+**Example:**
+```tsx
+<ApiKeyStatus keyType="openai" status={apiStatus} />
+```
+
+### ApiStatus
+
+Displays the status of an API connection.
+
+**Props:**
+- `status` (ApiStatusType): Status information
+- `size` (enum): Size of the status indicator ('sm', 'md', 'lg')
+- `apiName` (string): Optional name of the API to display
+- `compact` (boolean): Whether to show in compact mode
+
+**Example:**
+```tsx
+<ApiStatus 
+  status={apiStatus} 
+  size="md" 
+  apiName="OpenAI"
+  compact={false}
+/>
+```
+
+## Competitor Analysis Components
+
+### CompetitorAnalysis
+
+Main component for analyzing competitors.
+
+**Props:**
+- None (uses internal state and context)
+
+**Example:**
+```tsx
+<CompetitorAnalysis />
+```
+
+### AnalysisResults
+
+Displays the results of competitor analysis.
+
+**Props:**
+- `results` (array): Analysis results data
+- `onSave` (function): Function to save analysis
+- `confidenceScores` (object): Confidence scores for different aspects
+
+**Example:**
+```tsx
+<AnalysisResults 
+  results={analysisResults} 
+  onSave={handleSaveAnalysis} 
+  confidenceScores={scores}
+/>
+```
+
+### ApiKeyToggleList
+
+List of API providers with toggle functionality.
+
+**Props:**
+- `enabledApis` (array): List of enabled APIs
+- `onToggleApi` (function): Function to handle toggling
+- `apiStatuses` (object): Status information for each API
+- `onOpenApiKeyDialog` (function): Function to open the API key dialog
+
+**Example:**
+```tsx
+<ApiKeyToggleList
+  enabledApis={['openai', 'anthropic']}
+  onToggleApi={handleToggle}
+  apiStatuses={statuses}
+  onOpenApiKeyDialog={openDialog}
+/>
+```
+
+## UI Utility Components
+
+### ErrorBoundary
+
+Catches JavaScript errors in child components and displays a fallback UI.
+
+**Props:**
+- `children` (ReactNode): Child components
+- `fallback` (ReactNode): Optional custom fallback UI
+- `onReset` (function): Function to call when resetting the error boundary
+- `errorComponent` (component): Optional custom error component
+
+**Example:**
+```tsx
+<ErrorBoundary fallback={<p>Something went wrong</p>}>
+  <ComponentThatMightThrow />
+</ErrorBoundary>
+```
+
+### DocTooltip
+
+Displays a tooltip with helpful information.
+
+**Props:**
+- `content` (ReactNode): Tooltip content
+- `position` (string): Position of the tooltip
+- `className` (string): Additional CSS classes
+- `icon` (ReactNode): Custom icon
+- `compact` (boolean): Whether to use a smaller icon
+
+**Example:**
+```tsx
+<DocTooltip 
+  content="This field requires an OpenAI API key" 
+  position="top"
+/>
+```
+
+### Toaster
+
+Displays toast notifications.
+
+**Props:**
+- None (uses theme context)
+
+**Example:**
+```tsx
+// In your app root
+<Toaster />
+
+// Usage
+toast({
+  title: "Success",
+  description: "Operation completed successfully"
+});
+```
+
+## Hooks
+
+### useAnalysisContainer
+
+Hook for managing competitor analysis data.
+
+**Parameters:**
+- `analysisId` (string): ID of the analysis to fetch
+- `enabled` (boolean): Whether to enable the query
+
+**Returns:**
+- `competitor` (CompetitorData): The competitor data
+- `isLoading` (boolean): Loading state
+- `error` (Error): Any error that occurred
+- `refresh` (function): Function to refetch the data
+
+**Example:**
+```tsx
+const { competitor, isLoading, error, refresh } = useAnalysisContainer({
+  analysisId: "123",
+  enabled: true
+});
+```
+
+### useApiKeyStatus
+
+Hook for managing API key statuses.
+
+**Returns:**
+- `apiStatuses`: Status information for all API keys
+- `refreshApiStatus`: Function to refresh statuses
+- `isLoading`: Loading state
+
+**Example:**
+```tsx
+const { apiStatuses, refreshApiStatus, isLoading } = useApiKeyStatus();
+```
+
+### useCompetitorAnalysis
+
+Hook for managing competitor analysis functionality.
+
+**Returns:**
+- Various state variables and functions for competitor analysis
+
+**Example:**
+```tsx
+const {
+  competitorInput,
+  setCompetitorInput,
+  handleAnalysis,
+  results,
+  // etc.
+} = useCompetitorAnalysis();
+```
+
+## Utility Functions
+
+### renderUtils
+
+Helper functions for rendering data in components.
+
+#### safeRenderValue(value, fallback)
+- Safely renders a value with a fallback for null/undefined
+
+#### formatDate(dateString, options)
+- Formats a date string to a human-readable format
+
+#### formatPercent(value, fallback)
+- Formats a number as a percentage
+
+#### formatCurrency(value, currency, fallback)
+- Formats a number as currency
+
+**Example:**
+```tsx
+import { safeRenderValue, formatDate } from '@/utils/renderUtils';
+
+// Usage
+<p>{safeRenderValue(data.description, 'No description available')}</p>
+<p>Created on: {formatDate(data.created_at)}</p>
+```
+
+## Type System
+
+The application uses a comprehensive type system for data management:
+
+### CompetitorData
+Main interface for competitor information
+
+### SwotItem
+Structure for SWOT analysis items
+
+### ApiStatus
+Status information about an API key/connection
+
+For full type definitions, see `src/types/competitor/unified-types.ts`.

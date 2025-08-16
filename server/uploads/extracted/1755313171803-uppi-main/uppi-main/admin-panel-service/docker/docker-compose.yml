@@ -1,0 +1,243 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database (only for fully local setup)
+  postgres:
+    image: postgres:15-alpine
+    container_name: admin-panel-postgres
+    environment:
+      POSTGRES_DB: ${DB_NAME:-admin_panel}
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ../database/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    networks:
+      - admin-panel-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-admin_panel}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    profiles:
+      - local-db
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: admin-panel-redis
+    command: redis-server --appendonly yes ${REDIS_PASSWORD:+--requirepass $REDIS_PASSWORD}
+    volumes:
+      - redis_data:/data
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    networks:
+      - admin-panel-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Supabase Local (optional - for fully local development)
+  supabase:
+    image: supabase/supabase:latest
+    container_name: admin-panel-supabase
+    environment:
+      POSTGRES_PASSWORD: ${SUPABASE_DB_PASSWORD:-postgres}
+      JWT_SECRET: ${JWT_SECRET:-your-super-secret-jwt-key}
+      ANON_KEY: ${SUPABASE_ANON_KEY}
+      SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_KEY}
+    ports:
+      - "54321:8000"  # Studio
+      - "54322:5432"  # PostgreSQL
+      - "54323:3000"  # API Gateway
+    volumes:
+      - supabase_data:/var/lib/postgresql/data
+      - ../database/schema.sql:/docker-entrypoint-initdb.d/schema.sql:ro
+    networks:
+      - admin-panel-network
+    profiles:
+      - local-supabase
+
+  # API Service
+  api:
+    build:
+      context: ../
+      dockerfile: docker/Dockerfile.api
+      target: ${BUILD_TARGET:-production}
+    container_name: admin-panel-api
+    environment:
+      NODE_ENV: ${NODE_ENV:-production}
+      PORT: 3000
+      
+      # Supabase Configuration
+      SUPABASE_URL: ${SUPABASE_URL}
+      SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY}
+      SUPABASE_SERVICE_KEY: ${SUPABASE_SERVICE_KEY}
+      
+      # Database Configuration (fallback)
+      DB_HOST: ${DB_HOST:-postgres}
+      DB_PORT: ${DB_PORT:-5432}
+      DB_NAME: ${DB_NAME:-admin_panel}
+      DB_USER: ${DB_USER:-postgres}
+      DB_PASSWORD: ${DB_PASSWORD:-postgres}
+      DB_SSL: ${DB_SSL:-false}
+      
+      # Redis Configuration
+      REDIS_HOST: ${REDIS_HOST:-redis}
+      REDIS_PORT: ${REDIS_PORT:-6379}
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      
+      # JWT Configuration
+      JWT_SECRET: ${JWT_SECRET:-your-super-secret-jwt-key-change-in-production}
+      
+      # CORS Configuration
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3001,http://localhost}
+      
+      # External API Keys
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      GITHUB_TOKEN: ${GITHUB_TOKEN}
+      
+      # Application Configuration
+      APP_NAME: ${APP_NAME:-Admin Panel Service}
+      APP_VERSION: ${APP_VERSION:-1.0.0}
+      TENANT_ID: ${TENANT_ID:-default}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@localhost}
+      
+      # Feature Flags
+      FEATURE_TYPE_COVERAGE: ${FEATURE_TYPE_COVERAGE:-true}
+      FEATURE_PACKAGE_MANAGEMENT: ${FEATURE_PACKAGE_MANAGEMENT:-true}
+      FEATURE_GITHUB_INTEGRATION: ${FEATURE_GITHUB_INTEGRATION:-false}
+      FEATURE_REAL_TIME_UPDATES: ${FEATURE_REAL_TIME_UPDATES:-true}
+      FEATURE_WEBHOOKS: ${FEATURE_WEBHOOKS:-true}
+      FEATURE_AUDIT_LOGS: ${FEATURE_AUDIT_LOGS:-true}
+      
+      # Monitoring
+      MONITORING_ENABLED: ${MONITORING_ENABLED:-false}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      
+    ports:
+      - "${API_PORT:-3000}:3000"
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - admin-panel-network
+    volumes:
+      - ../api:/app
+      - /app/node_modules
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Frontend Service
+  frontend:
+    build:
+      context: ../
+      dockerfile: docker/Dockerfile.frontend
+      target: ${BUILD_TARGET:-production}
+    container_name: admin-panel-frontend
+    environment:
+      # Frontend Environment Variables
+      VITE_API_URL: ${VITE_API_URL:-http://localhost:3000/api}
+      VITE_SOCKET_URL: ${VITE_SOCKET_URL:-http://localhost:3000}
+      VITE_APP_NAME: ${VITE_APP_NAME:-Admin Panel}
+      VITE_APP_VERSION: ${VITE_APP_VERSION:-1.0.0}
+      VITE_SUPABASE_URL: ${SUPABASE_URL}
+      VITE_SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY}
+      VITE_TENANT_ID: ${TENANT_ID:-default}
+      
+      # Feature Flags
+      VITE_FEATURE_TYPE_COVERAGE: ${FEATURE_TYPE_COVERAGE:-true}
+      VITE_FEATURE_PACKAGE_MANAGEMENT: ${FEATURE_PACKAGE_MANAGEMENT:-true}
+      VITE_FEATURE_GITHUB_INTEGRATION: ${FEATURE_GITHUB_INTEGRATION:-false}
+      VITE_FEATURE_REAL_TIME_UPDATES: ${FEATURE_REAL_TIME_UPDATES:-true}
+      
+    ports:
+      - "${FRONTEND_PORT:-3001}:80"
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - admin-panel-network
+    volumes:
+      - ../frontend:/app
+      - /app/node_modules
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Prometheus (Optional - for monitoring)
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: admin-panel-prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--web.enable-lifecycle'
+    ports:
+      - "${PROMETHEUS_PORT:-9090}:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    networks:
+      - admin-panel-network
+    profiles:
+      - monitoring
+
+  # Grafana (Optional - for dashboards)
+  grafana:
+    image: grafana/grafana:latest
+    container_name: admin-panel-grafana
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: false
+    ports:
+      - "${GRAFANA_PORT:-3002}:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+    networks:
+      - admin-panel-network
+    profiles:
+      - monitoring
+
+  # Nginx (Optional - for reverse proxy and SSL)
+  nginx:
+    image: nginx:alpine
+    container_name: admin-panel-nginx
+    ports:
+      - "${NGINX_HTTP_PORT:-80}:80"
+      - "${NGINX_HTTPS_PORT:-443}:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - api
+      - frontend
+    networks:
+      - admin-panel-network
+    profiles:
+      - reverse-proxy
+
+volumes:
+  postgres_data:
+  redis_data:
+  supabase_data:
+  prometheus_data:
+  grafana_data:
+
+networks:
+  admin-panel-network:
+    driver: bridge

@@ -31,10 +31,26 @@ class Scan {
       project_id,
       started_at: new Date(),
       status,
-      scan_options: JSON.stringify(scan_options)
+      scan_options: scan_options // Database service will handle JSON serialization
     });
 
     return new Scan(result);
+  }
+
+  // Helper method to parse JSON fields
+  static parseJsonFields(scan) {
+    const fields = ['scan_options', 'results'];
+    for (const field of fields) {
+      if (scan[field] && typeof scan[field] === 'string') {
+        try {
+          scan[field] = JSON.parse(scan[field]);
+        } catch (e) {
+          // Keep original value if parsing fails
+          console.warn(`Failed to parse JSON for field ${field}:`, e.message);
+        }
+      }
+    }
+    return scan;
   }
 
   // Find scan by ID
@@ -42,23 +58,7 @@ class Scan {
     const scans = await db.select('scans', 'id = $1', [id]);
     if (scans.length === 0) return null;
     
-    // Parse JSON fields only if they are strings
-    const scan = scans[0];
-    if (scan.scan_options && typeof scan.scan_options === 'string') {
-      try {
-        scan.scan_options = JSON.parse(scan.scan_options);
-      } catch (e) {
-        // Keep original value if parsing fails
-      }
-    }
-    if (scan.results && typeof scan.results === 'string') {
-      try {
-        scan.results = JSON.parse(scan.results);
-      } catch (e) {
-        // Keep original value if parsing fails
-      }
-    }
-    
+    const scan = this.parseJsonFields(scans[0]);
     return new Scan(scan);
   }
 
@@ -169,9 +169,13 @@ class Scan {
     const result = await db.update('scans', updateData, 'id = $1', [this.id]);
     
     if (result) {
-      // Parse JSON fields for the instance
-      if (result.scan_options) result.scan_options = JSON.parse(result.scan_options);
-      if (result.results) result.results = JSON.parse(result.results);
+      // Parse JSON fields for the instance only if they are strings
+      if (result.scan_options && typeof result.scan_options === 'string') {
+        result.scan_options = JSON.parse(result.scan_options);
+      }
+      if (result.results && typeof result.results === 'string') {
+        result.results = JSON.parse(result.results);
+      }
       
       Object.assign(this, result);
       return this;
@@ -190,46 +194,60 @@ class Scan {
       ...otherResults
     } = scanResults;
 
-    // Save scan results and update status
-    await this.update({
-      status: 'completed',
-      completed_at: new Date(),
-      files_scanned: files.length,
-      lines_of_code: files.reduce((sum, f) => sum + (f.lines || 0), 0),
-      conflicts_found: conflicts.length,
-      results: {
-        ...otherResults,
+    try {
+      // Create a clean results object without circular references
+      const cleanResults = {
         summary: {
           total_files: files.length,
           total_lines: files.reduce((sum, f) => sum + (f.lines || 0), 0),
           total_conflicts: conflicts.length,
           avg_complexity: files.length > 0 ? 
             files.reduce((sum, f) => sum + (f.complexity || 0), 0) / files.length : 0
-        }
+        },
+        // Only include serializable properties from otherResults
+        ...(otherResults.id && { id: otherResults.id }),
+        ...(otherResults.timestamp && { timestamp: otherResults.timestamp }),
+        ...(otherResults.scanTime && { scanTime: otherResults.scanTime }),
+        ...(otherResults.rootPath && { rootPath: otherResults.rootPath })
+      };
+
+      // Save scan results and update status
+      await this.update({
+        status: 'completed',
+        completed_at: new Date(),
+        files_scanned: files.length,
+        lines_of_code: files.reduce((sum, f) => sum + (f.lines || 0), 0),
+        conflicts_found: conflicts.length,
+        results: cleanResults
+      });
+
+      // Save detailed file data
+      if (files.length > 0) {
+        await this.saveFiles(files);
       }
-    });
 
-    // Save detailed file data
-    if (files.length > 0) {
-      await this.saveFiles(files);
+      // Save conflicts
+      if (conflicts.length > 0) {
+        await this.saveConflicts(conflicts);
+      }
+
+      // Save dependencies
+      if (dependencies.length > 0) {
+        await this.saveDependencies(dependencies);
+      }
+
+      // Save metrics
+      if (Object.keys(metrics).length > 0) {
+        await this.saveMetrics(metrics);
+      }
+
+      return this;
+    } catch (error) {
+      console.error('Error completing scan:', error);
+      // Mark scan as failed if completion fails
+      await this.fail(`Failed to complete scan: ${error.message}`);
+      throw error;
     }
-
-    // Save conflicts
-    if (conflicts.length > 0) {
-      await this.saveConflicts(conflicts);
-    }
-
-    // Save dependencies
-    if (dependencies.length > 0) {
-      await this.saveDependencies(dependencies);
-    }
-
-    // Save metrics
-    if (Object.keys(metrics).length > 0) {
-      await this.saveMetrics(metrics);
-    }
-
-    return this;
   }
 
   // Mark scan as failed

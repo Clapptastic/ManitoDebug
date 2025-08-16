@@ -1,0 +1,29 @@
+
+# This file contains configuration for the Supabase edge functions
+
+# Project ID from supabase settings
+project_id = "jqbdjttdaihidoyalqvs"
+
+# Function-specific configurations
+[functions]
+
+[functions.analyze-competitor]
+verify_jwt = true
+
+[functions.validate-api-key]
+verify_jwt = true
+
+[functions.save-api-key]
+verify_jwt = true
+
+[functions.user-api-keys]
+verify_jwt = true
+
+[functions.check-api-keys]
+verify_jwt = true
+
+[functions.set-super-admin]
+verify_jwt = true
+
+[functions.unified-api-key-manager]
+verify_jwt = true

@@ -20,6 +20,7 @@ import ConflictsList from './components/ConflictsList'
 import AIPanel from './components/AIPanel'
 import SettingsModal from './components/SettingsModal'
 import { ToastProvider, useToast } from './components/Toast'
+import { SettingsProvider } from './contexts/SettingsContext'
 import { ScanningLoader, LoadingOverlay } from './components/Loading'
 import Tooltip from './components/Tooltip'
 import useWebSocket from './hooks/useWebSocket'
@@ -438,7 +439,9 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <ToastProvider>
-        <AppContent />
+        <SettingsProvider>
+          <AppContent />
+        </SettingsProvider>
       </ToastProvider>
     </QueryClientProvider>
   )

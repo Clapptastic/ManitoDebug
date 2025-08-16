@@ -1,5 +1,7 @@
-import { parse } from 'acorn';
-import { simple as walk } from 'acorn-walk';
+import { parse } from '@babel/parser';
+import traverse from '@babel/traverse';
+// Handle both ES module and CommonJS exports
+const traverseFunction = traverse.default || traverse;
 import { glob } from 'glob';
 import fs from 'fs/promises';
 import path from 'path';
@@ -103,21 +105,32 @@ export class CodeScanner {
       const isJSX = filePath.endsWith('.jsx') || filePath.endsWith('.tsx');
       
       let ast;
+      
+      // Determine parser plugins based on file type
+      const plugins = ['decorators'];
+      
+      if (isTypeScript) {
+        plugins.push('typescript');
+      }
+      
+      if (isJSX) {
+        plugins.push('jsx');
+      }
+      
+      const parseOptions = {
+        sourceType: 'module',
+        allowImportExportEverywhere: true,
+        allowReturnOutsideFunction: true,
+        plugins: plugins
+      };
+
       try {
-        ast = parse(content, {
-          ecmaVersion: 'latest',
-          sourceType: 'module',
-          allowHashBang: true,
-          allowReturnOutsideFunction: true
-        });
+        ast = parse(content, parseOptions);
       } catch (parseError) {
         try {
-          ast = parse(content, {
-            ecmaVersion: 'latest',
-            sourceType: 'script',
-            allowHashBang: true,
-            allowReturnOutsideFunction: true
-          });
+          // Fallback to script mode
+          const scriptOptions = { ...parseOptions, sourceType: 'script' };
+          ast = parse(content, scriptOptions);
         } catch (secondError) {
           console.warn(`Parse error in ${filePath}:`, parseError.message);
           return null;
@@ -137,21 +150,24 @@ export class CodeScanner {
         complexity: 0
       };
 
-      walk(ast, {
-        ImportDeclaration: (node) => {
+      const self = this;
+      traverseFunction(ast, {
+        ImportDeclaration(path) {
+          const node = path.node;
           const importPath = node.source.value;
           analysis.imports.push({
             source: importPath,
             specifiers: node.specifiers.map(spec => ({
               type: spec.type,
               local: spec.local?.name,
-              imported: spec.imported?.name
+              imported: spec.imported?.name || spec.local?.name
             }))
           });
-          this.addDependency(filePath, importPath);
+          self.addDependency(filePath, importPath);
         },
         
-        ExportNamedDeclaration: (node) => {
+        ExportNamedDeclaration(path) {
+          const node = path.node;
           if (node.declaration) {
             if (node.declaration.type === 'FunctionDeclaration') {
               analysis.exports.push({
@@ -169,16 +185,44 @@ export class CodeScanner {
           }
         },
         
-        FunctionDeclaration: (node) => {
+        ExportDefaultDeclaration(path) {
+          const node = path.node;
+          if (node.declaration.type === 'FunctionDeclaration' && node.declaration.id) {
+            analysis.exports.push({
+              type: 'function',
+              name: node.declaration.id.name,
+              default: true
+            });
+          } else {
+            analysis.exports.push({
+              type: 'default',
+              name: 'default'
+            });
+          }
+        },
+        
+        FunctionDeclaration(path) {
+          const node = path.node;
           analysis.functions.push({
             name: node.id?.name || '<anonymous>',
             params: node.params.length,
             line: node.loc?.start.line
           });
-          analysis.complexity += this.calculateComplexity(node);
+          analysis.complexity += self.calculateComplexity(node);
         },
         
-        VariableDeclarator: (node) => {
+        ArrowFunctionExpression(path) {
+          const node = path.node;
+          analysis.functions.push({
+            name: '<arrow>',
+            params: node.params.length,
+            line: node.loc?.start.line
+          });
+          analysis.complexity += self.calculateComplexity(node);
+        },
+        
+        VariableDeclarator(path) {
+          const node = path.node;
           if (node.id?.name) {
             analysis.variables.push({
               name: node.id.name,
@@ -295,16 +339,33 @@ export class CodeScanner {
     let complexity = 1;
     
     try {
-      walk(node.body, {
-        IfStatement: () => complexity++,
-        WhileStatement: () => complexity++,
-        ForStatement: () => complexity++,
-        ForInStatement: () => complexity++,
-        ForOfStatement: () => complexity++,
-        SwitchCase: () => complexity++,
-        CatchClause: () => complexity++,
-        ConditionalExpression: () => complexity++,
-        LogicalExpression: (logicalNode) => {
+      traverseFunction(node, {
+        IfStatement() {
+          complexity++;
+        },
+        WhileStatement() {
+          complexity++;
+        },
+        ForStatement() {
+          complexity++;
+        },
+        ForInStatement() {
+          complexity++;
+        },
+        ForOfStatement() {
+          complexity++;
+        },
+        SwitchCase() {
+          complexity++;
+        },
+        CatchClause() {
+          complexity++;
+        },
+        ConditionalExpression() {
+          complexity++;
+        },
+        LogicalExpression(path) {
+          const logicalNode = path.node;
           if (logicalNode.operator === '&&' || logicalNode.operator === '||') {
             complexity++;
           }

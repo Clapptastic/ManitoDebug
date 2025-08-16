@@ -1,0 +1,155 @@
+
+/* Development Tools CSS */
+body.dev-debug-layout * {
+  outline: 1px solid rgba(255, 0, 0, 0.2);
+}
+
+body.dev-slow-animations * {
+  transition-duration: 2s !important;
+  animation-duration: 2s !important;
+}
+
+/* DevTools overlay styles */
+.dev-tools-overlay {
+  position: fixed;
+  bottom: 20px;
+  left: 20px;
+  z-index: 9999;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 12px;
+  color: var(--foreground, #eee);
+  background-color: var(--background, rgba(0, 0, 0, 0.8));
+  border-radius: 8px;
+  padding: 12px;
+  max-width: 90vw;
+  max-height: 80vh;
+  overflow: auto;
+  box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.1));
+  backdrop-filter: blur(10px);
+}
+
+/* DevTools minimized styles */
+.dev-tools-minimized {
+  position: fixed;
+  bottom: 20px;
+  left: 20px;
+  z-index: 9999;
+  background-color: var(--background, rgba(0, 0, 0, 0.8));
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.1));
+  border-radius: 8px;
+  padding: 6px 12px;
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  color: var(--foreground, white);
+  font-size: 12px;
+  cursor: pointer;
+  backdrop-filter: blur(10px);
+  font-family: ui-sans-serif, system-ui, sans-serif;
+}
+
+/* Error highlight for dev mode */
+.dev-error-highlight {
+  position: relative;
+}
+
+.dev-error-highlight::after {
+  content: '⚠️';
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  background-color: rgb(220, 38, 38);
+  color: white;
+  font-size: 10px;
+  padding: 2px;
+  border-radius: 50%;
+  z-index: 100;
+}
+
+/* Performance indicator */
+.dev-perf-indicator {
+  position: fixed;
+  top: 0;
+  left: 0;
+  background-color: rgba(0, 0, 0, 0.7);
+  color: white;
+  font-size: 10px;
+  padding: 2px 5px;
+  z-index: 9999;
+}
+
+/* Code block styles for devtools */
+.dev-code-block {
+  background-color: var(--muted, #1e1e1e);
+  border-radius: 4px;
+  padding: 8px;
+  margin: 8px 0;
+  overflow-x: auto;
+  white-space: pre;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+/* Toast notification for dev tools */
+.dev-toast {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  background-color: var(--background, rgba(0, 0, 0, 0.8));
+  color: var(--foreground, white);
+  padding: 8px 12px;
+  border-radius: 4px;
+  z-index: 9999;
+  font-size: 14px;
+  max-width: 300px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+  animation: dev-toast-slide 0.3s ease;
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.1));
+}
+
+@keyframes dev-toast-slide {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+/* Error source badges */
+.dev-error-badge {
+  padding: 2px 6px;
+  border-radius: 10px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.dev-error-badge-browser {
+  background-color: rgba(220, 38, 38, 0.2);
+  color: rgb(220, 38, 38);
+}
+
+.dev-error-badge-api {
+  background-color: rgba(79, 70, 229, 0.2);
+  color: rgb(79, 70, 229);
+}
+
+.dev-error-badge-supabase {
+  background-color: rgba(16, 185, 129, 0.2);
+  color: rgb(16, 185, 129);
+}
+
+.dev-error-badge-hook {
+  background-color: rgba(245, 158, 11, 0.2);
+  color: rgb(245, 158, 11);
+}
+
+.dev-error-badge-console {
+  background-color: rgba(107, 114, 128, 0.2);
+  color: rgb(107, 114, 128);
+}

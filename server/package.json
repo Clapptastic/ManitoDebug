@@ -9,8 +9,9 @@
     "build": "echo 'No build required for server'"
   },
   "dependencies": {
-    "@manito/core": "*",
     "@anthropic-ai/sdk": "^0.24.0",
+    "@manito/core": "*",
+    "adm-zip": "^0.5.16",
     "bcrypt": "^6.0.0",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
@@ -20,6 +21,7 @@
     "helmet": "^7.1.0",
     "joi": "^17.10.0",
     "jsonwebtoken": "^9.0.2",
+    "multer": "^2.0.2",
     "openai": "^4.0.0",
     "pg": "^8.11.0",
     "winston": "^3.10.0",

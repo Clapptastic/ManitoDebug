@@ -18,8 +18,17 @@ import {
   Zap,
   Star
 } from 'lucide-react'
+import { useSettings } from '../contexts/SettingsContext'
 
 function AIPanel({ scanResults, onClose }) {
+  const { 
+    settings, 
+    getValidAIProvider, 
+    getAIApiKey, 
+    getAIModel,
+    showNotification 
+  } = useSettings()
+  
   const [messages, setMessages] = useState([
     {
       id: 1,
@@ -31,14 +40,40 @@ function AIPanel({ scanResults, onClose }) {
   const [inputMessage, setInputMessage] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [isExpanded, setIsExpanded] = useState(false)
-  const [selectedProvider, setSelectedProvider] = useState('local')
+  const [selectedProvider, setSelectedProvider] = useState(() => getValidAIProvider() || 'local')
   const messagesEndRef = useRef(null)
   const inputRef = useRef(null)
 
   const aiProviders = {
     local: { name: 'Local AI', icon: '🏠', color: 'text-blue-400' },
-    openai: { name: 'OpenAI GPT', icon: '🤖', color: 'text-green-400' },
-    claude: { name: 'Claude', icon: '🧠', color: 'text-purple-400' }
+    openai: { 
+      name: 'OpenAI GPT', 
+      icon: '🤖', 
+      color: 'text-green-400',
+      apiKey: getAIApiKey('openai'),
+      model: getAIModel('openai')
+    },
+    anthropic: { 
+      name: 'Claude', 
+      icon: '🧠', 
+      color: 'text-purple-400',
+      apiKey: getAIApiKey('anthropic'),
+      model: getAIModel('anthropic')
+    },
+    google: { 
+      name: 'Google Gemini', 
+      icon: '🔍', 
+      color: 'text-orange-400',
+      apiKey: getAIApiKey('google'),
+      model: getAIModel('google')
+    },
+    custom: { 
+      name: 'Custom API', 
+      icon: '⚙️', 
+      color: 'text-gray-400',
+      apiKey: getAIApiKey('custom'),
+      model: 'custom'
+    }
   }
 
   const suggestedQuestions = [
@@ -165,47 +200,180 @@ function AIPanel({ scanResults, onClose }) {
     setIsLoading(true)
 
     try {
-      // Send to AI API
-      const response = await fetch('/api/ai/send', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          message: inputMessage,
-          context: scanResults,
-          provider: selectedProvider
-        })
-      })
-
-      const result = await response.json()
+      const response = await callAIAPI(inputMessage, selectedProvider)
       
-      if (result.success) {
-        const aiResponse = {
-          id: Date.now() + 1,
-          type: 'ai',
-          content: result.data.response,
-          timestamp: new Date(),
-          suggestions: result.data.suggestions,
-          confidence: result.data.confidence
-        }
-        
-        setMessages(prev => [...prev, aiResponse])
-      } else {
-        throw new Error(result.message || 'Failed to get AI response')
-      }
-    } catch (error) {
-      const errorMessage = {
+      const aiResponse = {
         id: Date.now() + 1,
-        type: 'error',
-        content: `Sorry, I encountered an error: ${error.message}. Please try again or check your connection.`,
+        type: 'ai',
+        content: response,
         timestamp: new Date()
       }
-      
-      setMessages(prev => [...prev, errorMessage])
+
+      setMessages(prev => [...prev, aiResponse])
+    } catch (error) {
+      console.error('Error getting AI response:', error)
+      showNotification('error', 'Failed to get AI response. Please check your API configuration.')
+      setMessages(prev => [...prev, {
+        id: Date.now() + 1,
+        type: 'ai',
+        content: 'Sorry, I encountered an error while processing your request. Please check your API configuration in settings.',
+        timestamp: new Date(),
+        isError: true
+      }])
     } finally {
       setIsLoading(false)
     }
+  }
+
+  const callAIAPI = async (message, provider) => {
+    if (provider === 'local') {
+      // Simulate local AI response
+      await new Promise(resolve => setTimeout(resolve, 1500))
+      return generateLocalResponse(message)
+    }
+
+    const providerConfig = aiProviders[provider]
+    if (!providerConfig?.apiKey) {
+      throw new Error(`No API key configured for ${provider}`)
+    }
+
+    const context = scanResults ? `Codebase Context: ${JSON.stringify(scanResults, null, 2)}\n\nUser Question: ${message}` : message
+    
+    switch (provider) {
+      case 'openai':
+        return await callOpenAI(providerConfig.apiKey, providerConfig.model, context)
+      case 'anthropic':
+        return await callAnthropic(providerConfig.apiKey, providerConfig.model, context)
+      case 'google':
+        return await callGoogle(providerConfig.apiKey, providerConfig.model, context)
+      case 'custom':
+        return await callCustomAPI(providerConfig.apiKey, context)
+      default:
+        throw new Error(`Unsupported provider: ${provider}`)
+    }
+  }
+
+  const callOpenAI = async (apiKey, model, message) => {
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model: model || 'gpt-3.5-turbo',
+        messages: [
+          {
+            role: 'system',
+            content: 'You are a helpful AI code analysis assistant. Provide clear, actionable insights about code structure, potential improvements, and best practices.'
+          },
+          {
+            role: 'user',
+            content: message
+          }
+        ],
+        max_tokens: settings.aiResponseLength === 'long' ? 1000 : 500,
+        temperature: 0.7
+      })
+    })
+
+    if (!response.ok) {
+      throw new Error(`OpenAI API error: ${response.status}`)
+    }
+
+    const data = await response.json()
+    return data.choices[0]?.message?.content || 'No response from OpenAI'
+  }
+
+  const callAnthropic = async (apiKey, model, message) => {
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01'
+      },
+      body: JSON.stringify({
+        model: model || 'claude-3-haiku-20240307',
+        max_tokens: settings.aiResponseLength === 'long' ? 1000 : 500,
+        messages: [
+          {
+            role: 'user',
+            content: message
+          }
+        ]
+      })
+    })
+
+    if (!response.ok) {
+      throw new Error(`Anthropic API error: ${response.status}`)
+    }
+
+    const data = await response.json()
+    return data.content[0]?.text || 'No response from Claude'
+  }
+
+  const callGoogle = async (apiKey, model, message) => {
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model || 'gemini-pro'}:generateContent?key=${apiKey}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        contents: [
+          {
+            parts: [
+              {
+                text: message
+              }
+            ]
+          }
+        ],
+        generationConfig: {
+          maxOutputTokens: settings.aiResponseLength === 'long' ? 1000 : 500,
+          temperature: 0.7
+        }
+      })
+    })
+
+    if (!response.ok) {
+      throw new Error(`Google API error: ${response.status}`)
+    }
+
+    const data = await response.json()
+    return data.candidates[0]?.content?.parts[0]?.text || 'No response from Google'
+  }
+
+  const callCustomAPI = async (apiKey, message) => {
+    // This would be configured based on user's custom API endpoint
+    // For now, we'll simulate a response
+    await new Promise(resolve => setTimeout(resolve, 1000))
+    return `Custom API Response: ${message.substring(0, 100)}...`
+  }
+
+  const generateLocalResponse = (message) => {
+    // Enhanced local response generation based on scan results
+    if (!scanResults) {
+      return "I don't have any code analysis data to work with. Please run a scan first to analyze your codebase."
+    }
+
+    const files = scanResults.files || []
+    const conflicts = scanResults.conflicts || []
+    
+    if (message.toLowerCase().includes('complexity') || message.toLowerCase().includes('complex')) {
+      const complexFiles = files.filter(f => (f.complexity || 0) > 5)
+      return `I found ${complexFiles.length} files with high complexity (>5). These files might benefit from refactoring to improve maintainability.`
+    }
+    
+    if (message.toLowerCase().includes('conflict') || message.toLowerCase().includes('issue')) {
+      return `I detected ${conflicts.length} potential conflicts in your codebase. These should be reviewed and resolved to ensure code quality.`
+    }
+    
+    if (message.toLowerCase().includes('structure') || message.toLowerCase().includes('architecture')) {
+      return `Your codebase contains ${files.length} files with a total of ${files.reduce((sum, f) => sum + (f.lines || 0), 0)} lines of code. The structure appears to be well-organized.`
+    }
+    
+    return `I understand your question about "${message}". Based on the scan results, I can help you analyze your codebase structure, identify potential improvements, and answer specific questions about your code.`
   }
 
   const handleKeyPress = (e) => {

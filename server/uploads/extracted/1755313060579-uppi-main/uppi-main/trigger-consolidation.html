@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Trigger Consolidation</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+    <h1>Consolidating Data...</h1>
+    <div id="status">Starting consolidation...</div>
+    
+    <script>
+        const { createClient } = supabase;
+        const supabaseClient = createClient(
+            'https://jqbdjttdaihidoyalqvs.supabase.co',
+            'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpxYmRqdHRkYWloaWRveWFscXZzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDY0ODAzNzYsImV4cCI6MjA2MjA1NjM3Nn0.FJTBD9b9DLtFZKdj4hQiJXTx4Avg8Kxv_MA-q3egbBo'
+        );
+
+        async function triggerConsolidation() {
+            const statusDiv = document.getElementById('status');
+            
+            try {
+                statusDiv.innerHTML = 'Calling bulk consolidation function...';
+                
+                const { data, error } = await supabaseClient.functions.invoke('bulk-consolidate-companies', {
+                    body: {}
+                });
+                
+                if (error) {
+                    throw error;
+                }
+                
+                statusDiv.innerHTML = `
+                    <h2>Consolidation Complete!</h2>
+                    <pre>${JSON.stringify(data, null, 2)}</pre>
+                `;
+                
+                console.log('Consolidation result:', data);
+                
+            } catch (error) {
+                statusDiv.innerHTML = `
+                    <h2>Error during consolidation:</h2>
+                    <pre style="color: red;">${error.message}</pre>
+                `;
+                console.error('Consolidation error:', error);
+            }
+        }
+        
+        // Start consolidation immediately
+        triggerConsolidation();
+    </script>
+</body>
+</html>

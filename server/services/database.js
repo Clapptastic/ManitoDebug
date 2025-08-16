@@ -90,11 +90,12 @@ class DatabaseService {
     }
     
     const start = Date.now();
+    let client = null;
+    
     try {
-      const client = await this.pool.connect();
+      client = await this.pool.connect();
       await client.query(`SET search_path TO ${this.schema}`);
       const res = await client.query(text, params);
-      client.release();
       
       const duration = Date.now() - start;
       this.logger.debug('Executed query', { 
@@ -109,9 +110,24 @@ class DatabaseService {
       this.logger.error('Query error', { 
         error: error.message,
         duration: `${duration}ms`,
-        query: text
+        query: text,
+        params: params.length
       });
+      
+      // Handle specific database errors
+      if (error.code === '23505') { // Unique constraint violation
+        throw new Error('Duplicate entry found');
+      } else if (error.code === '23503') { // Foreign key violation
+        throw new Error('Referenced record not found');
+      } else if (error.code === '42P01') { // Table doesn't exist
+        throw new Error('Database table not found - please run initialization');
+      }
+      
       throw error;
+    } finally {
+      if (client) {
+        client.release();
+      }
     }
   }
 
@@ -173,8 +189,27 @@ class DatabaseService {
       return this.mockInsert(table, data);
     }
     
+    // Handle JSON serialization for JSONB fields
+    const processedData = {};
     const keys = Object.keys(data);
-    const values = Object.values(data);
+    const values = [];
+    
+    for (const key of keys) {
+      const value = data[key];
+      if (value !== null && typeof value === 'object' && !(value instanceof Date)) {
+        // Serialize objects to JSON for JSONB fields
+        try {
+          processedData[key] = JSON.stringify(value);
+        } catch (error) {
+          this.logger.error('JSON serialization failed', { field: key, error: error.message });
+          processedData[key] = '{}';
+        }
+      } else {
+        processedData[key] = value;
+      }
+      values.push(processedData[key]);
+    }
+    
     const placeholders = keys.map((_, i) => `$${i + 1}`);
     
     const query = `
@@ -183,8 +218,13 @@ class DatabaseService {
       RETURNING ${returning}
     `;
     
-    const result = await this.query(query, values);
-    return result.rows[0];
+    try {
+      const result = await this.query(query, values);
+      return result.rows[0];
+    } catch (error) {
+      this.logger.error('Insert failed', { table, error: error.message, data: keys });
+      throw error;
+    }
   }
 
   // Helper method for UPDATE queries
@@ -193,8 +233,22 @@ class DatabaseService {
       return this.mockUpdate(table, data, where, whereParams);
     }
     
+    // Handle JSON serialization for JSONB fields
+    const processedData = {};
     const keys = Object.keys(data);
-    const values = Object.values(data);
+    const values = [];
+    
+    for (const key of keys) {
+      const value = data[key];
+      if (value !== null && typeof value === 'object' && !(value instanceof Date)) {
+        // Serialize objects to JSON for JSONB fields
+        processedData[key] = JSON.stringify(value);
+      } else {
+        processedData[key] = value;
+      }
+      values.push(processedData[key]);
+    }
+    
     const setClause = keys.map((key, i) => `${key} = $${i + 1}`).join(', ');
     const whereClause = where;
     

@@ -1,0 +1,223 @@
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --unicorn-primary: #9b87f5;
+    --unicorn-secondary: #7E69AB;
+    --unicorn-accent: #D6BCFA;
+    --unicorn-highlight: #E5DEFF;
+    --unicorn-magic: #8B5CF6;
+    
+    --background: 0 0% 100%;
+    --foreground: 240 10% 3.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 240 10% 3.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 240 10% 3.9%;
+    --primary: 262 80% 50%;
+    --primary-foreground: 355.7 100% 97.3%;
+    --secondary: 240 4.8% 95.9%;
+    --secondary-foreground: 240 5.9% 10%;
+    --muted: 240 4.8% 95.9%;
+    --muted-foreground: 240 3.8% 46.1%;
+    --accent: 262 80% 50%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 262 80% 50%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 240 5.9% 90%;
+    --input: 240 5.9% 90%;
+    --ring: 262 80% 50%;
+    --radius: 1rem;
+
+    /* Chart tokens */
+    --chart-secondary: 47 100% 50%;
+    --chart-1: 258 90% 67%;
+    --chart-2: 189 95% 43%;
+    --chart-3: 162 84% 39%;
+    --chart-4: 38 92% 50%;
+    --chart-5: 0 85% 61%;
+    --chart-6: 329 79% 58%;
+    --chart-7: 217 91% 60%;
+    --chart-8: 84 70% 43%;
+  }
+
+  .dark {
+    --background: 20 14.3% 4.1%;
+    --foreground: 0 0% 95%;
+    --card: 24 9.8% 10%;
+    --card-foreground: 0 0% 95%;
+    --popover: 0 0% 9%;
+    --popover-foreground: 0 0% 95%;
+    --primary: 262 80% 50%;
+    --primary-foreground: 355.7 100% 97.3%;
+    --secondary: 240 3.7% 15.9%;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 0 0% 15%;
+    --muted-foreground: 240 5% 64.9%;
+    --accent: 262 80% 50%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 262 80% 50%;
+    --destructive-foreground: 0 85.7% 97.3%;
+    --border: 240 3.7% 15.9%;
+    --input: 240 3.7% 15.9%;
+    --ring: 262 80% 50%;
+    
+    /* Chart tokens */
+    --chart-secondary: 47 100% 50%;
+    --chart-1: 258 90% 67%;
+    --chart-2: 189 95% 43%;
+    --chart-3: 162 84% 39%;
+    --chart-4: 38 92% 50%;
+    --chart-5: 0 85% 61%;
+    --chart-6: 329 79% 58%;
+    --chart-7: 217 91% 60%;
+    --chart-8: 84 70% 43%;
+  }
+}
+
+@keyframes sparkle {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.2); opacity: 0.8; }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-20px); }
+}
+
+@keyframes rainbow {
+  0% { color: var(--unicorn-primary); }
+  25% { color: var(--unicorn-secondary); }
+  50% { color: var(--unicorn-accent); }
+  75% { color: var(--unicorn-highlight); }
+  100% { color: var(--unicorn-primary); }
+}
+
+@keyframes gradientMove {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+@keyframes magicSparkle {
+  0% { transform: rotate(0deg) scale(1); }
+  25% { transform: rotate(90deg) scale(1.2); }
+  50% { transform: rotate(180deg) scale(1); }
+  75% { transform: rotate(270deg) scale(1.2); }
+  100% { transform: rotate(360deg) scale(1); }
+}
+
+@layer components {
+  .unicorn-theme {
+    @apply transition-all duration-300;
+  }
+
+  .unicorn-theme .animate-sparkle {
+    animation: sparkle 2s infinite;
+  }
+
+  .unicorn-theme .animate-float {
+    animation: float 3s ease-in-out infinite;
+  }
+
+  .unicorn-theme .animate-rainbow {
+    animation: rainbow 4s linear infinite;
+  }
+
+  .unicorn-theme .animate-gradient {
+    background: linear-gradient(45deg, var(--unicorn-primary), var(--unicorn-secondary), var(--unicorn-accent), var(--unicorn-highlight));
+    background-size: 300% 300%;
+    animation: gradientMove 15s ease infinite;
+  }
+
+  .unicorn-theme .animate-magic {
+    animation: magicSparkle 3s linear infinite;
+  }
+
+  .card {
+    @apply p-6 rounded-lg m-4 transition-transform duration-300;
+    background: linear-gradient(to right, #ff00cc, #ffb200);
+  }
+
+  .card:hover {
+    @apply transform -translate-y-1;
+  }
+
+  .glass {
+    @apply bg-white/10 backdrop-blur-lg border border-white/20 rounded-2xl;
+    box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
+  }
+
+  .card-gradient {
+    @apply bg-gradient-to-br from-unicorn-primary to-unicorn-magic/80 backdrop-blur-sm;
+    box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
+  }
+
+  .vibrant-card {
+    @apply text-white shadow-lg hover:shadow-xl transition-all duration-300;
+    background: linear-gradient(225deg, #ffb200 0%, #ff00cc 48%, #d500ff 100%);
+  }
+
+  .warm-card {
+    @apply text-white shadow-lg hover:shadow-xl transition-all duration-300;
+    background: linear-gradient(to right, #00ddb7 0%, #e8e500 100%);
+  }
+
+  .hover-scale {
+    @apply transition-transform duration-300 hover:scale-105;
+  }
+
+  .text-gradient {
+    @apply bg-clip-text text-transparent;
+    background-image: linear-gradient(to right, var(--unicorn-primary), var(--unicorn-secondary), var(--unicorn-accent), var(--unicorn-highlight));
+  }
+
+  /* Animation utilities for sidebar */
+  .animate-fade-in {
+    @apply animate-in fade-in-0 duration-300;
+  }
+
+  .animation-delay-0 { animation-delay: 0ms; }
+  .animation-delay-50 { animation-delay: 50ms; }
+  .animation-delay-100 { animation-delay: 100ms; }
+  .animation-delay-150 { animation-delay: 150ms; }
+  .animation-delay-200 { animation-delay: 200ms; }
+  .animation-delay-250 { animation-delay: 250ms; }
+  .animation-delay-300 { animation-delay: 300ms; }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground font-sans;
+  }
+}
+
+@media (max-width: 640px) {
+  .container {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+  
+  h1 {
+    font-size: 1.875rem !important;
+    line-height: 2.25rem !important;
+  }
+  
+  h2 {
+    font-size: 1.5rem !important;
+    line-height: 2rem !important;
+  }
+  
+  p {
+    font-size: 1rem !important;
+    line-height: 1.5rem !important;
+  }
+}

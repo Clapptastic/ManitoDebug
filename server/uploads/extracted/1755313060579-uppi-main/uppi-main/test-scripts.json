@@ -1,0 +1,20 @@
+
+{
+  "scripts": {
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "test:ui": "jest --testMatch='**/__tests__/components/**/*.test.[jt]s?(x)'",
+    "test:hooks": "jest --testMatch='**/__tests__/hooks/**/*.test.[jt]s?(x)'",
+    "test:services": "jest --testMatch='**/__tests__/services/**/*.test.[jt]s?(x)'",
+    "test:utils": "jest --testMatch='**/__tests__/utils/**/*.test.[jt]s?(x)'",
+    "test:integration": "jest --testMatch='**/__tests__/integration/**/*.test.[jt]s?(x)'",
+    "test:a11y": "jest --testMatch='**/__tests__/a11y/**/*.test.[jt]s?(x)'",
+    "test:types": "tsc --noEmit",
+    "test:all": "node src/__tests__/runAllTests.js",
+    "test:competitor-analysis": "jest --testMatch='**/__tests__/**/competitor-analysis/**/*.test.[jt]s?(x)'",
+    "test:auth": "jest --testMatch='**/__tests__/auth/**/*.test.[jt]s?(x)'",
+    "test:coverage:report": "npm run test:coverage && node src/__tests__/utils/generateCoverageReport.js",
+    "test:ci": "jest --ci --coverage"
+  }
+}

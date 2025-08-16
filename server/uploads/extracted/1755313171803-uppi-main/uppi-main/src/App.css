@@ -1,0 +1,127 @@
+
+#root {
+  margin: 0 auto;
+  padding: 0;
+  text-align: center;
+  width: 100%;
+  min-height: 100vh;
+  background: linear-gradient(135deg, #fdfcfb 0%, #e2d1c3 100%);
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+  font-family: 'Inter', sans-serif;
+}
+
+.logo {
+  height: 4em;
+  padding: 1em;
+  will-change: filter;
+  transition: filter 300ms;
+}
+
+@media (min-width: 768px) {
+  .logo {
+    height: 6em;
+    padding: 1.5em;
+  }
+}
+
+.logo:hover {
+  filter: drop-shadow(0 0 2em #9b87f5aa);
+}
+
+.logo.react:hover {
+  filter: drop-shadow(0 0 2em #7E69ABaa);
+}
+
+@keyframes logo-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  a:nth-of-type(2) .logo {
+    animation: logo-spin infinite 20s linear;
+  }
+}
+
+.card {
+  padding: 1.5em;
+  border-radius: 1rem;
+  background: linear-gradient(to right, #9b87f5, #7E69AB);
+  margin: 1rem;
+  transition: transform 0.3s ease;
+}
+
+@media (min-width: 768px) {
+  .card {
+    padding: 2em;
+  }
+}
+
+.card:hover {
+  transform: translateY(-5px);
+}
+
+.read-the-docs {
+  color: #888;
+  font-size: 0.875rem;
+  margin-top: 1rem;
+}
+
+.glass {
+  @apply bg-white/10 backdrop-blur-lg border border-white/20 rounded-2xl;
+  box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
+}
+
+.card-gradient {
+  @apply bg-gradient-to-br from-accent to-accent-light/80 backdrop-blur-sm;
+  box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
+}
+
+.vibrant-card {
+  background: linear-gradient(225deg, #9b87f5 0%, #7E69AB 48%, #6E59A5 100%);
+  @apply text-white shadow-lg hover:shadow-xl transition-all duration-300;
+}
+
+.warm-card {
+  background: linear-gradient(to right, #D6BCFA 0%, #9b87f5 100%);
+  @apply text-white shadow-lg hover:shadow-xl transition-all duration-300;
+}
+
+.hover-scale {
+  @apply transition-transform duration-300 hover:scale-105;
+}
+
+.text-gradient {
+  @apply bg-clip-text text-transparent bg-gradient-unicorn;
+}
+
+@media (max-width: 640px) {
+  .container {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+  
+  h1 {
+    font-size: 1.875rem !important;
+    line-height: 2.25rem !important;
+  }
+  
+  h2 {
+    font-size: 1.5rem !important;
+    line-height: 2rem !important;
+  }
+  
+  p {
+    font-size: 1rem !important;
+    line-height: 1.5rem !important;
+  }
+}

@@ -8,7 +8,9 @@ import {
   Copy,
   Download,
   Upload,
-  Zap
+  Zap,
+  Minimize2,
+  Maximize2
 } from 'lucide-react'
 
 const ToastContext = createContext()
@@ -49,73 +51,107 @@ const toastTypes = {
   }
 }
 
-function Toast({ toast, onClose }) {
+function Toast({ toast, onClose, onMinimize }) {
   const config = toastTypes[toast.type] || toastTypes.info
   const Icon = config.icon
+  const [isMinimized, setIsMinimized] = useState(toast.minimized || false)
+
+  const handleMinimize = () => {
+    setIsMinimized(!isMinimized)
+    onMinimize?.(toast.id, !isMinimized)
+  }
 
   return (
     <div className={`
-      glass-panel p-4 mb-3 border rounded-lg shadow-lg animate-slide-up
-      transition-all duration-300 hover:shadow-xl
+      glass-panel border rounded-lg shadow-2xl animate-slide-up
+      transition-all duration-300 hover:shadow-2xl backdrop-blur-sm
       ${config.className}
+      ${isMinimized ? 'p-2' : 'p-4'}
     `}>
       <div className="flex items-start justify-between">
-        <div className="flex items-start space-x-3">
+        <div className={`flex items-start space-x-3 ${isMinimized ? 'flex-1' : ''}`}>
           <div className={`p-1 rounded-lg bg-gray-800/50 ${toast.type === 'loading' ? 'animate-pulse' : ''}`}>
             <Icon className={`w-5 h-5 ${config.iconColor} ${toast.type === 'loading' ? 'animate-spin' : ''}`} />
           </div>
           
-          <div className="flex-1 min-w-0">
-            {toast.title && (
-              <h4 className="text-sm font-semibold text-white mb-1">
-                {toast.title}
-              </h4>
-            )}
-            <p className="text-sm leading-relaxed">
-              {toast.message}
-            </p>
-            
-            {/* Action Buttons */}
-            {toast.actions && (
-              <div className="mt-3 flex items-center space-x-2">
-                {toast.actions.map((action, index) => (
-                  <button
-                    key={index}
-                    onClick={() => {
-                      action.onClick?.()
-                      if (action.closeOnClick !== false) {
-                        onClose()
-                      }
-                    }}
-                    className="btn-ghost btn-sm text-xs"
-                  >
-                    {action.icon && <action.icon className="w-3 h-3 mr-1" />}
-                    {action.label}
-                  </button>
-                ))}
-              </div>
-            )}
+          {!isMinimized && (
+            <div className="flex-1 min-w-0">
+              {toast.title && (
+                <h4 className="text-sm font-semibold text-white mb-1">
+                  {toast.title}
+                </h4>
+              )}
+              <p className="text-sm leading-relaxed">
+                {toast.message}
+              </p>
+              
+              {/* Action Buttons */}
+              {toast.actions && (
+                <div className="mt-3 flex items-center space-x-2">
+                  {toast.actions.map((action, index) => (
+                    <button
+                      key={index}
+                      onClick={() => {
+                        action.onClick?.()
+                        if (action.closeOnClick !== false) {
+                          onClose()
+                        }
+                      }}
+                      className="btn-ghost btn-sm text-xs"
+                    >
+                      {action.icon && <action.icon className="w-3 h-3 mr-1" />}
+                      {action.label}
+                    </button>
+                  ))}
+                </div>
+              )}
 
-            {/* Progress bar for loading */}
-            {toast.type === 'loading' && toast.progress !== undefined && (
-              <div className="mt-2 w-full bg-gray-700 rounded-full h-2">
-                <div 
-                  className="bg-purple-500 h-2 rounded-full transition-all duration-300"
-                  style={{ width: `${Math.max(0, Math.min(100, toast.progress))}%` }}
-                />
-              </div>
-            )}
-          </div>
+              {/* Progress bar for loading */}
+              {toast.type === 'loading' && toast.progress !== undefined && (
+                <div className="mt-2 w-full bg-gray-700 rounded-full h-2">
+                  <div 
+                    className="bg-purple-500 h-2 rounded-full transition-all duration-300"
+                    style={{ width: `${Math.max(0, Math.min(100, toast.progress))}%` }}
+                  />
+                </div>
+              )}
+            </div>
+          )}
+          
+          {isMinimized && (
+            <div className="flex-1 min-w-0">
+              <span className="text-sm text-gray-300 truncate">
+                {toast.title || toast.message}
+              </span>
+            </div>
+          )}
         </div>
 
-        {!toast.persistent && (
+        <div className="flex items-center space-x-1 ml-2">
+          {/* Minimize/Maximize Button */}
           <button
-            onClick={onClose}
-            className="ml-2 p-1 rounded-lg hover:bg-gray-700/50 transition-colors group"
+            onClick={handleMinimize}
+            className="p-1 rounded-lg hover:bg-gray-700/50 transition-colors group"
+            title={isMinimized ? "Expand notification" : "Minimize notification"}
           >
-            <X className="w-4 h-4 text-gray-500 group-hover:text-gray-300" />
+            {isMinimized ? (
+              <Maximize2 className="w-4 h-4 text-gray-500 group-hover:text-gray-300" />
+            ) : (
+              <Minimize2 className="w-4 h-4 text-gray-500 group-hover:text-gray-300" />
+            )}
           </button>
-        )}
+          
+          {/* Close Button */}
+          {!toast.persistent && (
+            <button
+              onClick={onClose}
+              className="p-1 rounded-lg hover:bg-gray-700/50 transition-colors group"
+              title="Close notification"
+            >
+              <X className="w-4 h-4 text-gray-500 group-hover:text-gray-300" />
+            </button>
+          )}
+        </div>
       </div>
     </div>
   )
@@ -154,6 +190,10 @@ export function ToastProvider({ children }) {
       toast.id === id ? { ...toast, ...updates } : toast
     ))
   }, [])
+
+  const minimizeToast = useCallback((id, minimized) => {
+    updateToast(id, { minimized })
+  }, [updateToast])
 
   const clearAll = useCallback(() => {
     setToasts([])
@@ -254,6 +294,7 @@ export function ToastProvider({ children }) {
     addToast,
     removeToast,
     updateToast,
+    minimizeToast,
     clearAll,
     toasts
   }
@@ -263,13 +304,14 @@ export function ToastProvider({ children }) {
       {children}
       
       {/* Toast Container */}
-      <div className="fixed top-4 right-4 z-50 max-w-sm w-full pointer-events-none">
-        <div className="pointer-events-auto">
+      <div className="fixed top-4 right-4 z-[9999] max-w-sm w-full pointer-events-none">
+        <div className="pointer-events-auto space-y-2">
           {toasts.map(toast => (
             <Toast
               key={toast.id}
               toast={toast}
               onClose={() => removeToast(toast.id)}
+              onMinimize={minimizeToast}
             />
           ))}
         </div>

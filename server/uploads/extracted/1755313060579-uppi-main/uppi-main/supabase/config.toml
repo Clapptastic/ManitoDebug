@@ -1,0 +1,317 @@
+project_id = "jqbdjttdaihidoyalqvs"
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public"]
+extra_search_path = ["public"]
+max_rows = 1000
+
+[db]
+port = 54322
+shadow_port = 54320
+major_version = 15
+
+[studio]
+enabled = true
+port = 54323
+api_url = "http://127.0.0.1:54321"
+
+[edge_runtime]
+enabled = true
+inspector_port = 5433
+
+[functions.competitor-analysis]
+verify_jwt = true
+
+[functions.check-api-keys]
+verify_jwt = true
+
+[functions.save-api-key]
+verify_jwt = true
+
+[functions.validate-api-key]
+verify_jwt = true
+
+[functions.admin-api]
+verify_jwt = true
+
+[functions.type-coverage-analysis]
+verify_jwt = true
+
+[functions.database-schema]
+verify_jwt = true
+
+[functions.system-health]
+verify_jwt = true
+
+[functions.code-wiki]
+verify_jwt = true
+
+[functions.microservice-health]
+verify_jwt = true
+
+[functions.microservices]
+verify_jwt = true
+
+[functions.process-code-embeddings]
+verify_jwt = true
+
+[functions.semantic-code-search]
+verify_jwt = true
+
+[functions.code-embeddings]
+verify_jwt = true
+
+[functions.security-audit]
+verify_jwt = true
+
+[functions.database-optimizer]
+verify_jwt = true
+
+[functions.package-manager]
+verify_jwt = true
+
+[functions.secure-openai-chat]
+verify_jwt = true
+
+[functions.ai-chat]
+verify_jwt = true
+
+[functions.process-application-embeddings]
+verify_jwt = true
+
+[functions.api-key-management]
+verify_jwt = true
+
+[functions.secure-embeddings-api]
+verify_jwt = false
+
+[functions.admin-api-keys]
+verify_jwt = true
+
+[functions.api-key-validation]
+verify_jwt = true
+
+[functions.enrich-analysis-with-master-profile]
+verify_jwt = true
+
+[functions.prompt-get]
+verify_jwt = false
+
+# Newly ensured/added functions
+[functions.swagger-ui]
+verify_jwt = false
+
+[functions.get-function-url]
+verify_jwt = false
+
+[functions.github-code-embed]
+verify_jwt = true
+
+[functions.ai-cofounder-chat]
+verify_jwt = true
+
+[functions.ai-profile-setup]
+verify_jwt = true
+
+[functions.analyze-trends]
+verify_jwt = true
+
+[functions.get-openai-usage]
+verify_jwt = true
+
+[functions.get-anthropic-usage]
+verify_jwt = true
+
+[functions.get-gemini-usage]
+verify_jwt = true
+
+[functions.get-cohere-usage]
+verify_jwt = true
+
+[functions.get-mistral-usage]
+verify_jwt = true
+
+[functions.get-perplexity-usage]
+verify_jwt = true
+
+# Newly added to enforce protection
+[functions.process-document]
+verify_jwt = true
+
+[functions.log-api-metric]
+verify_jwt = true
+
+[functions.migrate-api-keys]
+verify_jwt = true
+
+# Explicitly configure additional functions
+[functions.comprehensive-competitor-analysis]
+verify_jwt = true
+
+[functions.log-error-event]
+verify_jwt = false
+
+[functions.competitor-analysis-gate]
+verify_jwt = true
+
+# Additional functions found in the codebase
+[functions.aggregate-analysis]
+verify_jwt = true
+
+[functions.ai-drill-down]
+verify_jwt = true
+
+[functions.ai-market-analyst] 
+verify_jwt = true
+
+[functions.ai-powered-analytics]
+verify_jwt = true
+
+[functions.ai-validation-engine]
+verify_jwt = true
+
+[functions.analysis-export]
+verify_jwt = true
+
+[functions.analyze-company-profile]
+verify_jwt = true
+
+[functions.analyze-docker]
+verify_jwt = true
+
+[functions.analyze-geographic]
+verify_jwt = true
+
+[functions.analyze-market-sentiment]
+verify_jwt = true
+
+[functions.analyze-pricing]
+verify_jwt = true
+
+[functions.api-key-validation-secure]
+verify_jwt = true
+
+[functions.api-metrics]
+verify_jwt = true
+
+[functions.audit-vault-system]
+verify_jwt = true
+
+[functions.bulk-consolidate-companies]
+verify_jwt = true
+
+[functions.business-plan-generator]
+verify_jwt = true
+
+[functions.calculate-market-size]
+verify_jwt = true
+
+[functions.calculate-threat-level]
+verify_jwt = true
+
+[functions.chat-session]
+verify_jwt = true
+
+
+[functions.competitor-analysis-secure]
+verify_jwt = true
+
+[functions.consolidate-company-data]
+verify_jwt = true
+
+[functions.cron-weekly-model-check]
+verify_jwt = false
+
+[functions.data-quality-analyzer]
+verify_jwt = true
+
+
+[functions.debug-all-functions]
+verify_jwt = true
+
+[functions.debug-api-key]
+verify_jwt = true
+
+[functions.debug-competitor-flow]
+verify_jwt = true
+
+[functions.docker-security-scan]
+verify_jwt = true
+
+[functions.document-processing]
+verify_jwt = true
+
+[functions.enhanced-ai-validation]
+verify_jwt = true
+
+[functions.unified-api-key-manager]
+verify_jwt = true
+
+[functions.financial-data]
+verify_jwt = true
+
+[functions.find-master-profile-match]
+verify_jwt = true
+
+[functions.find-similar-competitors]
+verify_jwt = true
+
+[functions.get-pricing-analysis]
+verify_jwt = true
+
+[functions.generate-analysis-pdf]
+verify_jwt = true
+
+[functions.generate-business-plan]
+verify_jwt = true
+
+[functions.generate-forecast]
+verify_jwt = true
+
+
+
+[functions.get-similar-companies]
+verify_jwt = true
+
+[functions.log-api]
+verify_jwt = false
+
+[functions.market-data-fetcher]
+verify_jwt = true
+
+[functions.news-aggregator]
+verify_jwt = true
+
+[functions.performance-monitor]
+verify_jwt = false
+
+
+[functions.search-master-companies]
+verify_jwt = true
+
+[functions.secure-api-key-vault]
+verify_jwt = true
+
+
+[functions.system-health-secure]
+verify_jwt = true
+
+[functions.unstable-hash]
+verify_jwt = false
+
+[functions.update-analysis-run]
+verify_jwt = true
+
+[functions.update-model-availability]
+verify_jwt = false
+
+[functions.validate-and-fix-api-keys]
+verify_jwt = true
+
+[functions.test-service-role]
+verify_jwt = false
+
+[functions.server-rate-limiter]
+verify_jwt = false
