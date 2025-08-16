@@ -35,6 +35,7 @@ import Tooltip, { HelpTooltip, KeyboardTooltip } from './Tooltip'
 function SettingsModal({ isOpen, onClose }) {
   const { toast } = useToast()
   const [activeTab, setActiveTab] = useState('general')
+  const modalRef = useRef(null)
   const [settings, setSettings] = useState({
     // General Settings
     theme: 'dark',
@@ -93,6 +94,33 @@ function SettingsModal({ isOpen, onClose }) {
   })
 
   const [hasChanges, setHasChanges] = useState(false)
+
+  // Handle click outside to close
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (modalRef.current && !modalRef.current.contains(event.target)) {
+        onClose()
+      }
+    }
+
+    const handleEscape = (event) => {
+      if (event.key === 'Escape') {
+        onClose()
+      }
+    }
+
+    if (isOpen) {
+      document.addEventListener('mousedown', handleClickOutside)
+      document.addEventListener('keydown', handleEscape)
+      document.body.style.overflow = 'hidden' // Prevent background scrolling
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+      document.removeEventListener('keydown', handleEscape)
+      document.body.style.overflow = 'unset'
+    }
+  }, [isOpen, onClose])
 
   // Load settings from localStorage on mount
   useEffect(() => {
@@ -706,10 +734,18 @@ function SettingsModal({ isOpen, onClose }) {
 
         {/* API Keys Section */}
         <div className="space-y-4">
-          <h4 className="text-md font-medium text-white">API Keys</h4>
-          <p className="text-sm text-gray-400">
-            Configure API keys for your preferred AI providers. Keys are stored locally and encrypted.
-          </p>
+          <div className="flex items-center justify-between">
+            <div>
+              <h4 className="text-md font-medium text-white">API Keys</h4>
+              <p className="text-sm text-gray-400">
+                Configure API keys for your preferred AI providers. Keys are stored locally and encrypted.
+              </p>
+            </div>
+            <div className="flex items-center space-x-2 text-xs text-gray-500">
+              <div className="w-2 h-2 bg-green-400 rounded-full"></div>
+              <span>Secure & Local</span>
+            </div>
+          </div>
           
           <div className="space-y-3">
             {/* OpenAI */}
@@ -894,12 +930,12 @@ function SettingsModal({ isOpen, onClose }) {
   )
 
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="glass-panel w-full max-w-4xl max-h-[90vh] flex flex-col">
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[9999] flex items-center justify-center p-2 sm:p-4 animate-fade-in">
+      <div ref={modalRef} className="glass-panel w-full max-w-4xl max-h-[90vh] flex flex-col animate-scale-up">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-700/50">
           <div className="flex items-center space-x-3">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-r from-blue-500 to-purple-500 flex items-center justify-center">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-r from-blue-500 to-purple-500 flex items-center justify-center shadow-lg">
               <Settings className="w-5 h-5 text-white" />
             </div>
             <div>
@@ -908,14 +944,18 @@ function SettingsModal({ isOpen, onClose }) {
             </div>
           </div>
           
-          <div className="flex items-center space-x-2">
+          <div className="flex items-center space-x-3">
             {hasChanges && (
-              <span className="text-xs text-yellow-400 mr-4">● Unsaved changes</span>
+              <div className="flex items-center space-x-2 px-3 py-1.5 bg-yellow-500/10 border border-yellow-500/30 rounded-lg">
+                <div className="w-2 h-2 bg-yellow-400 rounded-full animate-pulse"></div>
+                <span className="text-xs text-yellow-400 font-medium">Unsaved changes</span>
+              </div>
             )}
             <KeyboardTooltip shortcut="Escape" description="Close settings">
               <button
                 onClick={onClose}
-                className="p-2 rounded-lg hover:bg-gray-700/50 transition-colors"
+                className="p-2 rounded-lg hover:bg-gray-700/50 transition-all duration-200 hover:scale-105 focus:ring-2 focus:ring-blue-500/50 focus:outline-none"
+                aria-label="Close settings"
               >
                 <X className="w-5 h-5 text-gray-400" />
               </button>
@@ -923,24 +963,44 @@ function SettingsModal({ isOpen, onClose }) {
           </div>
         </div>
 
+        {/* Mobile Tab Selector */}
+        <div className="md:hidden border-b border-gray-700/50 p-4">
+          <select
+            value={activeTab}
+            onChange={(e) => setActiveTab(e.target.value)}
+            className="w-full px-3 py-2 bg-gray-800/50 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-blue-500/50 focus:outline-none"
+          >
+            {tabs.map(tab => (
+              <option key={tab.id} value={tab.id}>{tab.label}</option>
+            ))}
+          </select>
+        </div>
+
         <div className="flex flex-1 overflow-hidden">
           {/* Sidebar */}
-          <div className="w-64 border-r border-gray-700/50 p-4">
-            <nav className="space-y-1">
+          <div className="w-64 border-r border-gray-700/50 p-4 hidden md:block">
+            <nav className="space-y-2" role="tablist">
               {tabs.map(tab => {
                 const Icon = tab.icon
+                const isActive = activeTab === tab.id
                 return (
                   <button
                     key={tab.id}
                     onClick={() => setActiveTab(tab.id)}
-                    className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-sm transition-colors ${
-                      activeTab === tab.id
-                        ? 'bg-primary-600/20 text-primary-400 border border-primary-600/30'
-                        : 'text-gray-300 hover:bg-gray-700/30 hover:text-white'
+                    role="tab"
+                    aria-selected={isActive}
+                    aria-controls={`panel-${tab.id}`}
+                    className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-sm transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50 ${
+                      isActive
+                        ? 'bg-gradient-to-r from-primary-600/20 to-primary-500/10 text-primary-400 border border-primary-600/30 shadow-lg'
+                        : 'text-gray-300 hover:bg-gray-700/30 hover:text-white hover:scale-[1.02]'
                     }`}
                   >
-                    <Icon className="w-4 h-4" />
-                    <span>{tab.label}</span>
+                    <Icon className={`w-4 h-4 transition-colors ${isActive ? 'text-primary-400' : 'text-gray-400'}`} />
+                    <span className="font-medium">{tab.label}</span>
+                    {isActive && (
+                      <div className="ml-auto w-2 h-2 bg-primary-400 rounded-full"></div>
+                    )}
                   </button>
                 )
               })}
@@ -949,14 +1009,16 @@ function SettingsModal({ isOpen, onClose }) {
 
           {/* Content */}
           <div className="flex-1 flex flex-col">
-            <div className="flex-1 p-6 overflow-y-auto">
-              {activeTab === 'general' && renderGeneralSettings()}
-              {activeTab === 'appearance' && renderAppearanceSettings()}
-              {activeTab === 'notifications' && renderNotificationSettings()}
-              {activeTab === 'analysis' && renderAnalysisSettings()}
-              {activeTab === 'performance' && renderPerformanceSettings()}
-              {activeTab === 'security' && renderSecuritySettings()}
-              {activeTab === 'ai' && renderAISettings()}
+            <div className="flex-1 p-6 overflow-y-auto" role="tabpanel" id={`panel-${activeTab}`}>
+              <div className="animate-fade-in">
+                {activeTab === 'general' && renderGeneralSettings()}
+                {activeTab === 'appearance' && renderAppearanceSettings()}
+                {activeTab === 'notifications' && renderNotificationSettings()}
+                {activeTab === 'analysis' && renderAnalysisSettings()}
+                {activeTab === 'performance' && renderPerformanceSettings()}
+                {activeTab === 'security' && renderSecuritySettings()}
+                {activeTab === 'ai' && renderAISettings()}
+              </div>
             </div>
 
             {/* Footer */}
@@ -964,13 +1026,13 @@ function SettingsModal({ isOpen, onClose }) {
               <div className="flex items-center space-x-2">
                 <button
                   onClick={exportSettings}
-                  className="btn-ghost btn-sm flex items-center space-x-1"
+                  className="btn-ghost btn-sm flex items-center space-x-1 hover:bg-blue-500/10 hover:text-blue-400 transition-all duration-200"
                 >
                   <Download className="w-3 h-3" />
                   <span>Export</span>
                 </button>
                 
-                <label className="btn-ghost btn-sm flex items-center space-x-1 cursor-pointer">
+                <label className="btn-ghost btn-sm flex items-center space-x-1 cursor-pointer hover:bg-green-500/10 hover:text-green-400 transition-all duration-200">
                   <Upload className="w-3 h-3" />
                   <span>Import</span>
                   <input
@@ -983,27 +1045,27 @@ function SettingsModal({ isOpen, onClose }) {
                 
                 <button
                   onClick={resetSettings}
-                  className="btn-ghost btn-sm flex items-center space-x-1 text-yellow-400 hover:text-yellow-300"
+                  className="btn-ghost btn-sm flex items-center space-x-1 text-yellow-400 hover:text-yellow-300 hover:bg-yellow-500/10 transition-all duration-200"
                 >
                   <RotateCcw className="w-3 h-3" />
                   <span>Reset</span>
                 </button>
               </div>
               
-              <div className="flex items-center space-x-2">
+              <div className="flex items-center space-x-3">
                 <button
                   onClick={onClose}
-                  className="btn-secondary"
+                  className="px-4 py-2 text-gray-400 hover:text-gray-200 hover:bg-gray-700/50 rounded-lg transition-all duration-200 focus:ring-2 focus:ring-gray-500/50 focus:outline-none"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={saveSettings}
                   disabled={!hasChanges}
-                  className="btn-primary flex items-center space-x-2 disabled:opacity-50"
+                  className="px-4 py-2 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white rounded-lg font-medium transition-all duration-200 flex items-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed focus:ring-2 focus:ring-blue-500/50 focus:outline-none hover:scale-105"
                 >
                   <Save className="w-4 h-4" />
-                  <span>Save Changes</span>
+                  <span>{hasChanges ? 'Save Changes' : 'No Changes'}</span>
                 </button>
               </div>
             </div>
