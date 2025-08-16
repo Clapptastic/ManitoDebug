@@ -592,13 +592,40 @@ class SemanticSearchService {
   }
 
   async globalSearch(query, userId = null, limit = 50) {
+    const startTime = Date.now();
+    
     try {
+      // Validate input
+      if (!query || typeof query !== 'string' || query.trim().length === 0) {
+        throw new Error('Search query is required and must be a non-empty string');
+      }
+      
+      if (limit && (typeof limit !== 'number' || limit < 1 || limit > 1000)) {
+        throw new Error('Limit must be a number between 1 and 1000');
+      }
+      
+      if (userId && (typeof userId !== 'number' || userId < 1)) {
+        throw new Error('User ID must be a positive number');
+      }
+      
+      // Clean and prepare query
+      const cleanQuery = query.trim().toLowerCase();
+      
+      this.logger.info('Starting global search', { 
+        query: cleanQuery, 
+        userId, 
+        limit,
+        timestamp: new Date().toISOString()
+      });
+      
+      // Execute search
       const result = await enhancedDb.query(
-        'SELECT * FROM global_search($1, $2, $3)',
-        [query, userId, limit],
+        'SELECT * FROM manito_dev.global_search($1, $2, $3)',
+        [cleanQuery, userId, limit],
         {
-          cacheKey: `global_search_${query}_${userId}_${limit}`,
-          cacheTTL: 300
+          cacheKey: `global_search_${cleanQuery}_${userId}_${limit}`,
+          cacheTTL: 300,
+          timeout: 30000
         }
       );
       
@@ -611,16 +638,52 @@ class SemanticSearchService {
         groupedResults[row.entity_type].push(row);
       });
       
+      // Log search analytics
+      await this.logSearch({
+        query: cleanQuery,
+        userId,
+        resultCount: result.rows.length,
+        duration: Date.now() - startTime,
+        entityTypes: Object.keys(groupedResults)
+      });
+      
+      const duration = Date.now() - startTime;
+      this.logger.info('Global search completed', { 
+        query: cleanQuery,
+        resultCount: result.rows.length,
+        duration: `${duration}ms`,
+        entityTypes: Object.keys(groupedResults)
+      });
+      
       return {
-        results: result.rows,
-        grouped: groupedResults,
-        total: result.rows.length,
-        query,
-        type: 'global'
+        success: true,
+        data: {
+          results: result.rows,
+          grouped: groupedResults,
+          total: result.rows.length,
+          query: cleanQuery,
+          type: 'global',
+          duration: `${duration}ms`,
+          entityTypes: Object.keys(groupedResults)
+        }
       };
     } catch (error) {
-      this.logger.error('Global search failed', { error: error.message, query });
-      throw error;
+      const duration = Date.now() - startTime;
+      this.logger.error('Global search failed', { 
+        error: error.message,
+        query,
+        userId,
+        limit,
+        duration: `${duration}ms`,
+        stack: error.stack
+      });
+      
+      return {
+        success: false,
+        error: 'Search failed',
+        message: error.message,
+        duration: `${duration}ms`
+      };
     }
   }
 
@@ -778,15 +841,26 @@ class SemanticSearchService {
   }
 
   // Log search queries for analytics
-  async logSearch(query, userId = null, entityType = null, resultCount = 0) {
+  async logSearch(searchData) {
     try {
-      await enhancedDb.query(`
-        INSERT INTO search_logs (query, user_id, entity_type, result_count, created_at)
-        VALUES ($1, $2, $3, $4, NOW())
-      `, [query, userId, entityType, resultCount]);
+      const { query, userId, resultCount, duration, entityTypes } = searchData;
+      
+      await enhancedDb.query(
+        `INSERT INTO manito_dev.search_logs 
+         (query, user_id, result_count, rank, created_at) 
+         VALUES ($1, $2, $3, $4, NOW())`,
+        [query, userId, resultCount, duration]
+      );
+      
+      this.logger.debug('Search logged', { 
+        query, 
+        userId, 
+        resultCount, 
+        duration,
+        entityTypes 
+      });
     } catch (error) {
-      // Search logging is optional, don't throw
-      this.logger.debug('Failed to log search query', { error: error.message });
+      this.logger.error('Failed to log search', { error: error.message });
     }
   }
 }

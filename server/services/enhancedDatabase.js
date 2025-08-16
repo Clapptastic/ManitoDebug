@@ -131,15 +131,82 @@ class EnhancedDatabaseService extends EventEmitter {
     this.mockData.set('websocket_connections', []);
   }
 
-  // Enhanced query method with caching and monitoring
+  // Security validation methods
+  validateQueryInput(text, params) {
+    // Prevent SQL injection
+    if (typeof text !== 'string') {
+      throw new Error('Query text must be a string');
+    }
+    
+    // Check for suspicious patterns
+    const suspiciousPatterns = [
+      /;\s*drop\s+table/i,
+      /;\s*delete\s+from/i,
+      /;\s*update\s+.+\s+set/i,
+      /union\s+select/i,
+      /exec\s*\(/i,
+      /xp_cmdshell/i,
+      /sp_executesql/i
+    ];
+    
+    for (const pattern of suspiciousPatterns) {
+      if (pattern.test(text)) {
+        throw new Error('Potentially dangerous SQL detected');
+      }
+    }
+    
+    // Validate parameters
+    if (!Array.isArray(params)) {
+      throw new Error('Parameters must be an array');
+    }
+    
+    // Check parameter types
+    for (let i = 0; i < params.length; i++) {
+      const param = params[i];
+      if (param !== null && typeof param === 'object' && !Array.isArray(param)) {
+        throw new Error(`Parameter ${i} contains object - potential injection risk`);
+      }
+    }
+  }
+
+  // Rate limiting
+  async checkRateLimit() {
+    const now = Date.now();
+    const windowMs = 60000; // 1 minute window
+    const maxQueries = 1000; // Max queries per minute
+    
+    // Clean old entries
+    this.queryHistory = this.queryHistory || [];
+    this.queryHistory = this.queryHistory.filter(time => now - time < windowMs);
+    
+    // Check if limit exceeded
+    if (this.queryHistory.length >= maxQueries) {
+      throw new Error('Query rate limit exceeded');
+    }
+    
+    // Add current query
+    this.queryHistory.push(now);
+  }
+
+  // Enhanced query method with caching, monitoring, and security
   async query(text, params = [], options = {}) {
     const {
       cacheKey = null,
       cacheTTL = 300, // 5 minutes default
       timeout = 30000,
       retries = 3,
-      retryDelay = 1000
+      retryDelay = 1000,
+      skipSchema = false, // New option for queries that don't need schema
+      validateInput = true // Security validation
     } = options;
+
+    // Security validation
+    if (validateInput) {
+      this.validateQueryInput(text, params);
+    }
+
+    // Rate limiting check
+    await this.checkRateLimit();
 
     // Check cache first
     if (cacheKey && this.cache.has(cacheKey)) {
@@ -163,7 +230,11 @@ class EnhancedDatabaseService extends EventEmitter {
     while (attempt < retries) {
       try {
         client = await this.pool.connect();
-        await client.query(`SET search_path TO ${this.schema}`);
+        
+        // Set schema unless explicitly skipped
+        if (!skipSchema) {
+          await client.query(`SET search_path TO ${this.schema}`);
+        }
         
         // Set statement timeout
         await client.query(`SET statement_timeout = ${timeout}`);
@@ -578,31 +649,87 @@ class EnhancedDatabaseService extends EventEmitter {
 
   // Health check with detailed metrics
   async health() {
+    const health = {
+      connected: false,
+      pool: {
+        totalCount: 0,
+        idleCount: 0,
+        waitingCount: 0
+      },
+      cache: {
+        hits: this.cacheStats.hits,
+        misses: this.cacheStats.misses,
+        sets: this.cacheStats.sets,
+        deletes: this.cacheStats.deletes,
+        hitRate: this.cacheStats.hits + this.cacheStats.misses > 0 
+          ? `${Math.round((this.cacheStats.hits / (this.cacheStats.hits + this.cacheStats.misses)) * 100)}%`
+          : '0%',
+        size: this.cache.size
+      },
+      serverTime: null,
+      version: null,
+      mockMode: false,
+      tables: [],
+      functions: [],
+      indexes: [],
+      security: {
+        rateLimitActive: true,
+        inputValidation: true,
+        suspiciousQueriesBlocked: this.suspiciousQueriesBlocked || 0
+      }
+    };
+
     try {
-      const result = await this.query('SELECT NOW(), version()', []);
-      const poolStats = {
+      const client = await this.pool.connect();
+      
+      // Test basic connection
+      const basicTest = await client.query('SELECT NOW() as current_time, version() as version');
+      health.serverTime = basicTest.rows[0].current_time;
+      health.version = basicTest.rows[0].version;
+      health.connected = true;
+      
+      // Get pool statistics
+      health.pool = {
         totalCount: this.pool.totalCount,
         idleCount: this.pool.idleCount,
         waitingCount: this.pool.waitingCount
       };
       
-      const cacheStats = this.getCacheStats();
+      // Check schema and objects
+      await client.query(`SET search_path TO ${this.schema}`);
       
-      const stats = {
-        connected: true,
-        pool: poolStats,
-        cache: cacheStats,
-        serverTime: result.rows[0].now,
-        version: result.rows[0].version
-      };
+      // Check tables
+      const tables = await client.query(`
+        SELECT table_name FROM information_schema.tables 
+        WHERE table_schema = $1
+        ORDER BY table_name
+      `, [this.schema]);
+      health.tables = tables.rows.map(row => row.table_name);
       
-      return stats;
+      // Check functions
+      const functions = await client.query(`
+        SELECT routine_name FROM information_schema.routines 
+        WHERE routine_schema = $1
+        ORDER BY routine_name
+      `, [this.schema]);
+      health.functions = functions.rows.map(row => row.routine_name);
+      
+      // Check indexes
+      const indexes = await client.query(`
+        SELECT indexname FROM pg_indexes 
+        WHERE schemaname = $1
+        ORDER BY indexname
+      `, [this.schema]);
+      health.indexes = indexes.rows.map(row => row.indexname);
+      
+      client.release();
+      
+      return health;
     } catch (error) {
-      return {
-        connected: false,
-        error: error.message,
-        cache: this.getCacheStats()
-      };
+      this.logger.error('Health check failed', { error: error.message });
+      health.error = error.message;
+      health.mockMode = true;
+      return health;
     }
   }
 

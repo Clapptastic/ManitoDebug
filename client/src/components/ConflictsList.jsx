@@ -21,6 +21,28 @@ function ConflictsList({ conflicts = [] }) {
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedConflict, setSelectedConflict] = useState(null)
 
+  // Validate conflicts data
+  const validConflicts = React.useMemo(() => {
+    if (!Array.isArray(conflicts)) {
+      console.warn('ConflictsList: conflicts prop is not an array', conflicts)
+      return []
+    }
+    
+    return conflicts.filter(conflict => {
+      if (!conflict || typeof conflict !== 'object') {
+        console.warn('ConflictsList: invalid conflict object', conflict)
+        return false
+      }
+      
+      if (!conflict.message || !conflict.severity || !conflict.type) {
+        console.warn('ConflictsList: conflict missing required fields', conflict)
+        return false
+      }
+      
+      return true
+    })
+  }, [conflicts])
+
   const severityConfig = {
     error: {
       icon: XCircle,
@@ -74,12 +96,14 @@ function ConflictsList({ conflicts = [] }) {
   }
 
   // Filter conflicts
-  const filteredConflicts = conflicts.filter(conflict => {
+  const filteredConflicts = validConflicts.filter(conflict => {
     const matchesSeverity = filterSeverity === 'all' || conflict.severity === filterSeverity
     const matchesType = filterType === 'all' || conflict.type === filterType
     const matchesSearch = searchTerm === '' || 
       conflict.message.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      conflict.files?.some(file => file.toLowerCase().includes(searchTerm.toLowerCase()))
+      (conflict.files && Array.isArray(conflict.files) && conflict.files.some(file => 
+        typeof file === 'string' && file.toLowerCase().includes(searchTerm.toLowerCase())
+      ))
     
     return matchesSeverity && matchesType && matchesSearch
   })
@@ -96,9 +120,13 @@ function ConflictsList({ conflicts = [] }) {
   }
 
   const formatFilePath = (filePath) => {
+    if (!filePath || typeof filePath !== 'string') {
+      return 'Unknown file'
+    }
+    
     const parts = filePath.split('/')
     if (parts.length > 3) {
-      return `.../${parts.slice(-2).join('/')}`
+      return `.../${parts.slice(-3).join('/')}`
     }
     return filePath
   }
@@ -120,28 +148,20 @@ function ConflictsList({ conflicts = [] }) {
     }
   }
 
-  if (conflicts.length === 0) {
+  // Show empty state if no valid conflicts
+  if (validConflicts.length === 0) {
     return (
       <div className="h-full flex items-center justify-center">
         <div className="text-center space-y-4">
-          <CheckCircle className="w-16 h-16 text-green-500 mx-auto" />
+          <CheckCircle className="w-16 h-16 text-green-600 mx-auto" />
           <div>
-            <h3 className="text-xl font-semibold text-green-400">No Conflicts Found!</h3>
-            <p className="text-gray-500 mt-2">Your codebase is looking great! All dependencies are properly structured.</p>
-          </div>
-          <div className="flex items-center justify-center space-x-4 text-sm text-gray-400">
-            <div className="flex items-center space-x-1">
-              <CheckCircle className="w-4 h-4 text-green-400" />
-              <span>Clean Dependencies</span>
-            </div>
-            <div className="flex items-center space-x-1">
-              <CheckCircle className="w-4 h-4 text-green-400" />
-              <span>No Circular References</span>
-            </div>
-            <div className="flex items-center space-x-1">
-              <CheckCircle className="w-4 h-4 text-green-400" />
-              <span>Well Structured</span>
-            </div>
+            <h3 className="text-lg font-semibold text-gray-300">No Conflicts Found</h3>
+            <p className="text-gray-500">
+              {Array.isArray(conflicts) && conflicts.length > 0 
+                ? 'All detected conflicts have been resolved or are not critical.'
+                : 'Run a scan to detect potential code conflicts and issues.'
+              }
+            </p>
           </div>
         </div>
       </div>

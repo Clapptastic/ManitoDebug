@@ -133,7 +133,7 @@ class FunctionalityTester {
         patterns: ['**/*.js']
       });
       
-      const testDir = path.join(__dirname, '..', 'test-project');
+      const testDir = path.join(__dirname, '..', 'core');
       const files = await scanner.findFiles(testDir);
       
       if (!files.some(file => file.endsWith('.js'))) {

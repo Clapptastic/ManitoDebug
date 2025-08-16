@@ -20,42 +20,73 @@ function MetricsPanel({ data }) {
   const filesizeChartRef = useRef()
   const dependencyChartRef = useRef()
 
-  // Calculate metrics
+  // Calculate metrics with error handling
   const metrics = React.useMemo(() => {
-    if (!data || !data.files) return null
-
-    const files = data.files
-    const totalLines = files.reduce((sum, f) => sum + (f.lines || 0), 0)
-    const totalSize = files.reduce((sum, f) => sum + (f.size || 0), 0)
-    const avgComplexity = files.reduce((sum, f) => sum + (f.complexity || 0), 0) / files.length
-    const complexFiles = files.filter(f => (f.complexity || 0) > 5)
-    const largeFiles = files.filter(f => (f.lines || 0) > 200)
-    
-    // File type distribution
-    const fileTypes = {}
-    files.forEach(f => {
-      const ext = f.filePath.split('.').pop() || 'unknown'
-      fileTypes[ext] = (fileTypes[ext] || 0) + 1
-    })
-
-    // Complexity distribution
-    const complexityDistribution = {
-      low: files.filter(f => (f.complexity || 0) <= 3).length,
-      medium: files.filter(f => (f.complexity || 0) > 3 && (f.complexity || 0) <= 6).length,
-      high: files.filter(f => (f.complexity || 0) > 6).length
+    if (!data || !data.files || !Array.isArray(data.files) || data.files.length === 0) {
+      return {
+        error: 'No scan data available',
+        totalFiles: 0,
+        totalLines: 0,
+        totalSize: 0,
+        avgComplexity: 0,
+        complexFiles: 0,
+        largeFiles: 0,
+        fileTypes: {},
+        complexityDistribution: { low: 0, medium: 0, high: 0 },
+        dependencies: 0,
+        conflicts: 0
+      }
     }
 
-    return {
-      totalFiles: files.length,
-      totalLines,
-      totalSize,
-      avgComplexity: Math.round(avgComplexity * 10) / 10,
-      complexFiles: complexFiles.length,
-      largeFiles: largeFiles.length,
-      fileTypes,
-      complexityDistribution,
-      dependencies: data.metrics?.dependencies || 0,
-      conflicts: data.conflicts?.length || 0
+    try {
+      const files = data.files
+      const totalLines = files.reduce((sum, f) => sum + (f.lines || 0), 0)
+      const totalSize = files.reduce((sum, f) => sum + (f.size || 0), 0)
+      const avgComplexity = files.reduce((sum, f) => sum + (f.complexity || 0), 0) / files.length
+      const complexFiles = files.filter(f => (f.complexity || 0) > 5)
+      const largeFiles = files.filter(f => (f.lines || 0) > 200)
+      
+      // File type distribution
+      const fileTypes = {}
+      files.forEach(f => {
+        const ext = f.filePath?.split('.').pop() || 'unknown'
+        fileTypes[ext] = (fileTypes[ext] || 0) + 1
+      })
+
+      // Complexity distribution
+      const complexityDistribution = {
+        low: files.filter(f => (f.complexity || 0) <= 3).length,
+        medium: files.filter(f => (f.complexity || 0) > 3 && (f.complexity || 0) <= 6).length,
+        high: files.filter(f => (f.complexity || 0) > 6).length
+      }
+
+      return {
+        totalFiles: files.length,
+        totalLines,
+        totalSize,
+        avgComplexity: Math.round(avgComplexity * 10) / 10,
+        complexFiles: complexFiles.length,
+        largeFiles: largeFiles.length,
+        fileTypes,
+        complexityDistribution,
+        dependencies: data.metrics?.dependencies || 0,
+        conflicts: data.conflicts?.length || 0
+      }
+    } catch (error) {
+      console.error('Error calculating metrics:', error)
+      return {
+        error: 'Error calculating metrics',
+        totalFiles: 0,
+        totalLines: 0,
+        totalSize: 0,
+        avgComplexity: 0,
+        complexFiles: 0,
+        largeFiles: 0,
+        fileTypes: {},
+        complexityDistribution: { low: 0, medium: 0, high: 0 },
+        dependencies: 0,
+        conflicts: 0
+      }
     }
   }, [data])
 
@@ -220,14 +251,14 @@ function MetricsPanel({ data }) {
 
   }, [metrics, data])
 
-  if (!metrics) {
+  if (metrics.error) {
     return (
       <div className="h-full flex items-center justify-center">
         <div className="text-center space-y-4">
-          <BarChart3 className="w-16 h-16 text-gray-600 mx-auto" />
+          <AlertTriangle className="w-16 h-16 text-red-600 mx-auto" />
           <div>
-            <h3 className="text-lg font-semibold text-gray-300">No Metrics Available</h3>
-            <p className="text-gray-500">Run a scan to see detailed metrics</p>
+            <h3 className="text-lg font-semibold text-gray-300">{metrics.error}</h3>
+            <p className="text-gray-500">Please ensure a scan has been run and data is available.</p>
           </div>
         </div>
       </div>

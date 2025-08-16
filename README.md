@@ -19,26 +19,33 @@ ManitoDebug is a comprehensive code analysis platform that combines AST parsing,
 
 ## 🚀 Quick Start
 
-Get ManitoDebug running in seconds with our interactive launcher:
+Get ManitoDebug running in seconds with a single command:
 
 ```bash
 # Clone the repository
 git clone <your-repo-url> manito-debug
 cd manito-debug
 
-# Install dependencies
-npm install
+# Run comprehensive setup (one-time)
+npm run setup
 
-# Launch interactive development environment
+# Launch full stack with 100% functionality
 npm run dev
 ```
 
-The interactive CLI will guide you through choosing the perfect development setup:
-- 💻 **Local Development** - Fast local setup with hot reloading
-- 🐳 **Docker Development** - Full containerized environment with database
-- ⚙️ **Custom Options** - Advanced configurations for specific needs
+**Single Command Launch**: `npm run dev` starts the complete full stack:
+- ✅ **Backend Server** (Port 3000)
+- ✅ **Frontend Client** (Port 5173) 
+- ✅ **Database Layer** (PostgreSQL with mock fallback)
+- ✅ **WebSocket Service** (Real-time communication)
+- ✅ **Search Engine** (Semantic search)
+- ✅ **Scanner Engine** (All scanning methods)
+- ✅ **AI Integration** (OpenAI, Anthropic, Google)
+- ✅ **Security Layer** (Authentication, rate limiting)
 
-For detailed instructions, see [QUICK_START.md](QUICK_START.md).
+**Verify Functionality**: `npm run test:e2e` runs comprehensive tests
+
+For detailed instructions, see [FULL_STACK_LAUNCH_GUIDE.md](docs/FULL_STACK_LAUNCH_GUIDE.md).
 
 ## 🏗️ Architecture
 

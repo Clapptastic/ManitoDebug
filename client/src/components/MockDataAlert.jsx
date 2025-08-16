@@ -24,6 +24,15 @@ function MockDataAlert({ scanResults, onOpenSettings, onRunScan }) {
     return null
   }
 
+  // Only show alert if there are significant mock data issues
+  const hasSignificantIssues = detection.indicators.zeroMetrics || 
+                              detection.indicators.emptyAIInsights || 
+                              detection.indicators.missingData
+
+  if (!hasSignificantIssues) {
+    return null
+  }
+
   const handleAction = (action) => {
     switch (action) {
       case 'open-settings':

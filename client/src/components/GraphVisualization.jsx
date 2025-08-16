@@ -32,7 +32,11 @@ function GraphVisualization({ data }) {
   }
 
   useEffect(() => {
-    if (!data || !data.files) return
+    if (!data || !data.files || !Array.isArray(data.files) || data.files.length === 0) {
+      // Clear previous visualization if no data
+      d3.select(svgRef.current).selectAll('*').remove()
+      return
+    }
 
     // Clear previous visualization
     d3.select(svgRef.current).selectAll('*').remove()
@@ -40,243 +44,198 @@ function GraphVisualization({ data }) {
     const container = containerRef.current
     if (!container) return
     
-    const containerRect = container.getBoundingClientRect()
-    const width = containerRect.width
-    const height = containerRect.height
+    try {
+      const containerRect = container.getBoundingClientRect()
+      const width = containerRect.width
+      const height = containerRect.height
 
-    // Create SVG
-    const svg = d3.select(svgRef.current)
-      .attr('width', width)
-      .attr('height', height)
-      .style('background', 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)')
+      // Create SVG
+      const svg = d3.select(svgRef.current)
+        .attr('width', width)
+        .attr('height', height)
+        .style('background', 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)')
 
-    // Create definitions for gradients and filters
-    const defs = svg.append('defs')
+      // Create definitions for gradients and filters
+      const defs = svg.append('defs')
 
-    // Gradient definitions for nodes
-    Object.entries(nodeTypes).forEach(([type, config]) => {
-      const gradient = defs.append('linearGradient')
-        .attr('id', `gradient-${type}`)
-        .attr('x1', '0%').attr('y1', '0%')
-        .attr('x2', '100%').attr('y2', '100%')
+      // Gradient definitions for nodes
+      Object.entries(nodeTypes).forEach(([type, config]) => {
+        const gradient = defs.append('linearGradient')
+          .attr('id', `gradient-${type}`)
+          .attr('x1', '0%').attr('y1', '0%')
+          .attr('x2', '100%').attr('y2', '100%')
 
-      gradient.append('stop')
-        .attr('offset', '0%')
-        .attr('style', `stop-color:${config.color};stop-opacity:0.8`)
+        gradient.append('stop')
+          .attr('offset', '0%')
+          .attr('style', `stop-color:${config.color};stop-opacity:0.8`)
 
-      gradient.append('stop')
-        .attr('offset', '100%')
-        .attr('style', `stop-color:${d3.color(config.color).darker(0.5)};stop-opacity:1`)
-    })
-
-    // Glow filter
-    const filter = defs.append('filter')
-      .attr('id', 'glow')
-      .attr('x', '-50%').attr('y', '-50%')
-      .attr('width', '200%').attr('height', '200%')
-
-    filter.append('feGaussianBlur')
-      .attr('stdDeviation', '3')
-      .attr('result', 'coloredBlur')
-
-    const feMerge = filter.append('feMerge')
-    feMerge.append('feMergeNode').attr('in', 'coloredBlur')
-    feMerge.append('feMergeNode').attr('in', 'SourceGraphic')
-
-    // Create zoom behavior
-    const zoom = d3.zoom()
-      .scaleExtent([0.1, 4])
-      .on('zoom', (event) => {
-        setZoomLevel(event.transform.k)
-        g.attr('transform', event.transform)
+        gradient.append('stop')
+          .attr('offset', '100%')
+          .attr('style', `stop-color:${d3.color(config.color).darker(0.5)};stop-opacity:1`)
       })
 
-    svg.call(zoom)
+      // Glow filter
+      const filter = defs.append('filter')
+        .attr('id', 'glow')
+        .attr('x', '-50%').attr('y', '-50%')
+        .attr('width', '200%').attr('height', '200%')
 
-    // Main group for zoom/pan
-    const g = svg.append('g')
+      filter.append('feGaussianBlur')
+        .attr('stdDeviation', '3')
+        .attr('result', 'coloredBlur')
 
-    // Process data into nodes and links
-    const nodes = data.files.map((file, index) => ({
-      id: file.filePath,
-      name: file.filePath.split('/').pop(),
-      fullPath: file.filePath,
-      type: getNodeType(file),
-      size: Math.max(8, Math.min(30, file.lines / 10)),
-      complexity: file.complexity || 1,
-      lines: file.lines,
-      fileSize: file.size,
-      imports: file.imports || [],
-      exports: file.exports || []
-    }))
+      const feMerge = filter.append('feMerge')
+      feMerge.append('feMergeNode').attr('in', 'coloredBlur')
+      feMerge.append('feMergeNode').attr('in', 'SourceGraphic')
 
-    const links = []
-    data.files.forEach(file => {
-      if (file.imports) {
-        file.imports.forEach(imp => {
-          if (imp.source.startsWith('.')) {
-            const targetFile = data.files.find(f => 
-              f.filePath.includes(imp.source.replace(/^\.\//, ''))
-            )
-            if (targetFile) {
-              links.push({
-                source: file.filePath,
-                target: targetFile.filePath,
-                type: 'import',
-                strength: 1
-              })
-            }
+      // Create zoom behavior
+      const zoom = d3.zoom()
+        .scaleExtent([0.1, 4])
+        .on('zoom', (event) => {
+          setZoomLevel(event.transform.k)
+          g.attr('transform', event.transform)
+        })
+
+      svg.call(zoom)
+
+      // Main group for zoom/pan
+      const g = svg.append('g')
+
+      // Process data into nodes and links
+      const nodes = data.files.map((file, index) => ({
+        id: file.filePath || `file-${index}`,
+        label: file.filePath?.split('/').pop() || `File ${index}`,
+        type: determineNodeType(file),
+        size: Math.max(20, Math.min(60, (file.lines || 0) / 10)),
+        complexity: file.complexity || 0,
+        lines: file.lines || 0,
+        filePath: file.filePath || ''
+      }))
+
+      // Create links from dependencies
+      const links = []
+      if (data.dependencies && typeof data.dependencies === 'object') {
+        Object.entries(data.dependencies).forEach(([from, to]) => {
+          if (from && to) {
+            links.push({
+              source: from,
+              target: to,
+              value: 1
+            })
           }
         })
       }
-    })
 
-    // Apply filters
-    const filteredNodes = nodes.filter(node => {
-      const matchesSearch = node.name.toLowerCase().includes(searchTerm.toLowerCase())
-      const matchesFilter = filterType === 'all' || node.type === filterType
-      return matchesSearch && matchesFilter
-    })
+      // Create force simulation
+      const simulation = d3.forceSimulation(nodes)
+        .force('link', d3.forceLink(links).id(d => d.id).distance(100))
+        .force('charge', d3.forceManyBody().strength(-300))
+        .force('center', d3.forceCenter(width / 2, height / 2))
+        .force('collision', d3.forceCollide().radius(d => d.size + 10))
 
-    const filteredLinks = links.filter(link => 
-      filteredNodes.some(n => n.id === link.source) && 
-      filteredNodes.some(n => n.id === link.target)
-    )
+      // Create links
+      const link = g.append('g')
+        .selectAll('line')
+        .data(links)
+        .enter().append('line')
+        .attr('stroke', '#4b5563')
+        .attr('stroke-width', 2)
+        .attr('stroke-opacity', 0.6)
 
-    // Create force simulation
-    const simulation = d3.forceSimulation(filteredNodes)
-      .force('link', d3.forceLink(filteredLinks).id(d => d.id).distance(100))
-      .force('charge', d3.forceManyBody().strength(-300))
-      .force('center', d3.forceCenter(width / 2, height / 2))
-      .force('collision', d3.forceCollide().radius(d => d.size + 5))
+      // Create nodes
+      const node = g.append('g')
+        .selectAll('g')
+        .data(nodes)
+        .enter().append('g')
+        .call(d3.drag()
+          .on('start', dragstarted)
+          .on('drag', dragged)
+          .on('end', dragended))
 
-    // Create links
-    const link = g.append('g')
-      .selectAll('line')
-      .data(filteredLinks)
-      .enter()
-      .append('line')
-      .attr('class', 'link')
-      .attr('stroke', '#475569')
-      .attr('stroke-opacity', 0.6)
-      .attr('stroke-width', 2)
-      .style('filter', 'drop-shadow(0px 0px 3px rgba(71, 85, 105, 0.5))')
-
-    // Create node groups
-    const nodeGroup = g.append('g')
-      .selectAll('g')
-      .data(filteredNodes)
-      .enter()
-      .append('g')
-      .attr('class', 'node-group')
-      .style('cursor', 'pointer')
-      .call(d3.drag()
-        .on('start', dragStarted)
-        .on('drag', dragged)
-        .on('end', dragEnded))
-
-    // Add circles for nodes
-    const circles = nodeGroup.append('circle')
-      .attr('r', d => d.size)
-      .attr('fill', d => `url(#gradient-${d.type})`)
-      .attr('stroke', '#ffffff')
-      .attr('stroke-width', 2)
-      .style('filter', 'url(#glow)')
-      .style('transition', 'all 0.3s ease')
-
-    // Add labels
-    const labels = nodeGroup.append('text')
-      .text(d => d.name)
-      .attr('x', 0)
-      .attr('y', d => d.size + 16)
-      .attr('text-anchor', 'middle')
-      .attr('class', 'node-label')
-      .style('font-size', '11px')
-      .style('font-weight', '500')
-      .style('fill', '#e2e8f0')
-      .style('pointer-events', 'none')
-
-    // Add icons
-    nodeGroup.append('text')
-      .text(d => nodeTypes[d.type]?.icon || '📄')
-      .attr('x', 0)
-      .attr('y', 6)
-      .attr('text-anchor', 'middle')
-      .style('font-size', d => `${Math.max(12, d.size / 2)}px`)
-      .style('pointer-events', 'none')
-
-    // Node interactions
-    circles
-      .on('mouseenter', function(event, d) {
-        d3.select(this)
-          .transition()
-          .duration(200)
-          .attr('r', d.size * 1.2)
-          .attr('stroke-width', 3)
-          
-        // Highlight connected nodes
-        const connectedIds = new Set()
-        filteredLinks.forEach(link => {
-          if (link.source.id === d.id) connectedIds.add(link.target.id)
-          if (link.target.id === d.id) connectedIds.add(link.source.id)
+      // Add circles to nodes
+      node.append('circle')
+        .attr('r', d => d.size)
+        .attr('fill', d => `url(#gradient-${d.type})`)
+        .attr('stroke', d => nodeTypes[d.type]?.color || '#6b7280')
+        .attr('stroke-width', 2)
+        .style('filter', 'url(#glow)')
+        .on('click', (event, d) => setSelectedNode(d))
+        .on('mouseover', function(event, d) {
+          d3.select(this).attr('stroke-width', 4)
+        })
+        .on('mouseout', function(event, d) {
+          d3.select(this).attr('stroke-width', 2)
         })
 
-        circles.style('opacity', node => 
-          node.id === d.id || connectedIds.has(node.id) ? 1 : 0.3
-        )
-        
-        link.style('opacity', l => 
-          l.source.id === d.id || l.target.id === d.id ? 1 : 0.1
-        )
+      // Add labels to nodes
+      node.append('text')
+        .text(d => d.label)
+        .attr('text-anchor', 'middle')
+        .attr('dy', '.35em')
+        .attr('fill', 'white')
+        .attr('font-size', '12px')
+        .attr('font-weight', 'bold')
+        .style('pointer-events', 'none')
+
+      // Update positions on simulation tick
+      simulation.on('tick', () => {
+        link
+          .attr('x1', d => d.source.x)
+          .attr('y1', d => d.source.y)
+          .attr('x2', d => d.target.x)
+          .attr('y2', d => d.target.y)
+
+        node
+          .attr('transform', d => `translate(${d.x},${d.y})`)
       })
-      .on('mouseleave', function() {
-        d3.select(this)
-          .transition()
-          .duration(200)
-          .attr('r', d => d.size)
-          .attr('stroke-width', 2)
-          
-        circles.style('opacity', 1)
-        link.style('opacity', 0.6)
-      })
-      .on('click', function(event, d) {
-        setSelectedNode(d)
-        event.stopPropagation()
-      })
 
-    // Update positions on simulation tick
-    simulation.on('tick', () => {
-      link
-        .attr('x1', d => d.source.x)
-        .attr('y1', d => d.source.y)
-        .attr('x2', d => d.target.x)
-        .attr('y2', d => d.target.y)
+      // Drag functions
+      function dragstarted(event, d) {
+        if (!event.active) simulation.alphaTarget(0.3).restart()
+        d.fx = d.x
+        d.fy = d.y
+      }
 
-      nodeGroup.attr('transform', d => `translate(${d.x},${d.y})`)
-    })
+      function dragged(event, d) {
+        d.fx = event.x
+        d.fy = event.y
+      }
 
-    // Drag functions
-    function dragStarted(event, d) {
-      if (!event.active) simulation.alphaTarget(0.3).restart()
-      d.fx = d.x
-      d.fy = d.y
+      function dragended(event, d) {
+        if (!event.active) simulation.alphaTarget(0)
+        d.fx = null
+        d.fy = null
+      }
+
+      // Determine node type based on file properties
+      function determineNodeType(file) {
+        const path = file.filePath || ''
+        if (path.includes('test') || path.includes('spec')) return 'test'
+        if (path.includes('component') || path.includes('Component')) return 'component'
+        if (path.includes('util') || path.includes('helper')) return 'utility'
+        if (path.includes('service') || path.includes('api')) return 'service'
+        if (path.includes('node_modules') || path.includes('vendor')) return 'external'
+        return 'entry'
+      }
+
+    } catch (error) {
+      console.error('Error creating graph visualization:', error)
+      // Show error state
+      d3.select(svgRef.current).selectAll('*').remove()
+      const svg = d3.select(svgRef.current)
+        .attr('width', 400)
+        .attr('height', 300)
+        .style('background', 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)')
+      
+      svg.append('text')
+        .attr('x', 200)
+        .attr('y', 150)
+        .attr('text-anchor', 'middle')
+        .attr('fill', 'red')
+        .attr('font-size', '16px')
+        .text('Error creating visualization')
     }
-
-    function dragged(event, d) {
-      d.fx = event.x
-      d.fy = event.y
-    }
-
-    function dragEnded(event, d) {
-      if (!event.active) simulation.alphaTarget(0)
-      d.fx = null
-      d.fy = null
-    }
-
-    // Clear selection on background click
-    svg.on('click', () => setSelectedNode(null))
-
-  }, [data, searchTerm, filterType])
+  }, [data])
 
   const getNodeType = (file) => {
     const path = file.filePath.toLowerCase()

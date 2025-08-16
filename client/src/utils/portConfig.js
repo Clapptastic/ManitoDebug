@@ -3,91 +3,98 @@
  * Provides consistent port configuration across the client application
  */
 
-// Get port configuration from global or environment variables
-export const getPortConfig = () => {
-  // Check for global port configuration (set by Vite)
-  if (typeof __PORT_CONFIG__ !== 'undefined') {
-    return __PORT_CONFIG__;
+class DynamicPortConfig {
+  constructor() {
+    this.config = null;
+    this.initialized = false;
   }
-  
-  // Fallback to environment variables
-  return {
-    server: process.env.REACT_APP_SERVER_PORT || 3000,
-    client: process.env.REACT_APP_CLIENT_PORT || 5173,
-    database: process.env.REACT_APP_DB_PORT || 5432,
-    redis: process.env.REACT_APP_REDIS_PORT || 6379,
-    websocket: process.env.REACT_APP_WS_PORT || 3000,
-    monitoring: process.env.REACT_APP_MONITORING_PORT || 9090
-  };
-};
 
-// Get server URL with port
-export const getServerUrl = () => {
-  const config = getPortConfig();
-  return `http://localhost:${config.server}`;
-};
-
-// Get WebSocket URL with port
-export const getWebSocketUrl = () => {
-  const config = getPortConfig();
-  return `ws://localhost:${config.websocket}`;
-};
-
-// Get API endpoint URL
-export const getApiUrl = (endpoint) => {
-  const serverUrl = getServerUrl();
-  return `${serverUrl}/api${endpoint}`;
-};
-
-// Validate port configuration
-export const validatePortConfig = (config) => {
-  const issues = [];
-  
-  // Check for valid port numbers
-  for (const [service, port] of Object.entries(config)) {
-    if (typeof port !== 'number' || port < 1 || port > 65535) {
-      issues.push(`Invalid port for ${service}: ${port}`);
+  async initialize() {
+    if (this.initialized) {
+      return this.config;
     }
-  }
-  
-  // Check for port conflicts
-  const usedPorts = new Set();
-  for (const [service, port] of Object.entries(config)) {
-    if (usedPorts.has(port)) {
-      issues.push(`Port conflict: ${service} and another service both use port ${port}`);
+
+    try {
+      // Try to get port configuration from server
+      const response = await fetch('/api/ports');
+      if (response.ok) {
+        const result = await response.json();
+        if (result.success) {
+          this.config = result.data;
+          this.initialized = true;
+          console.log('✅ Dynamic port configuration loaded:', this.config);
+          return this.config;
+        }
+      }
+    } catch (error) {
+      console.warn('⚠️  Could not fetch dynamic port configuration:', error.message);
     }
-    usedPorts.add(port);
-  }
-  
-  return {
-    valid: issues.length === 0,
-    issues
-  };
-};
 
-// Log port configuration for debugging
-export const logPortConfig = () => {
-  const config = getPortConfig();
-  const validation = validatePortConfig(config);
-  
-  console.log('🔧 Port Configuration:', config);
-  
-  if (!validation.valid) {
-    console.warn('⚠️  Port configuration issues:');
-    validation.issues.forEach(issue => console.warn(`  - ${issue}`));
-  } else {
-    console.log('✅ Port configuration is valid');
-  }
-  
-  return config;
-};
+    // Fallback to environment variables or defaults
+    this.config = {
+      server: parseInt(import.meta.env.VITE_SERVER_PORT) || 3000,
+      client: parseInt(import.meta.env.VITE_CLIENT_PORT) || 5173,
+      websocket: parseInt(import.meta.env.VITE_WEBSOCKET_PORT) || 3001,
+      environment: import.meta.env.NODE_ENV || 'development'
+    };
 
-// Default export
-export default {
-  getPortConfig,
-  getServerUrl,
-  getWebSocketUrl,
-  getApiUrl,
-  validatePortConfig,
-  logPortConfig
-};
+    this.initialized = true;
+    console.log('✅ Using fallback port configuration:', this.config);
+    return this.config;
+  }
+
+  getConfig() {
+    if (!this.initialized) {
+      throw new Error('Port config not initialized. Call initialize() first.');
+    }
+    return this.config;
+  }
+
+  getServerPort() {
+    return this.getConfig().server;
+  }
+
+  getClientPort() {
+    return this.getConfig().client;
+  }
+
+  getWebSocketPort() {
+    return this.getConfig().websocket;
+  }
+
+  getServerUrl() {
+    return `http://localhost:${this.getServerPort()}`;
+  }
+
+  getClientUrl() {
+    return `http://localhost:${this.getClientPort()}`;
+  }
+
+  getWebSocketUrl() {
+    return `ws://localhost:${this.getWebSocketPort()}`;
+  }
+
+  // Auto-detect server port by trying common ports
+  async autoDetectServerPort() {
+    const commonPorts = [3000, 3001, 3002, 3003, 3004, 3005, 8080];
+    
+    for (const port of commonPorts) {
+      try {
+        const response = await fetch(`http://localhost:${port}/api/health`);
+        if (response.ok) {
+          console.log(`✅ Auto-detected server on port ${port}`);
+          return port;
+        }
+      } catch (error) {
+        continue;
+      }
+    }
+    
+    throw new Error('Could not auto-detect server port');
+  }
+}
+
+// Create singleton instance
+const dynamicPortConfig = new DynamicPortConfig();
+
+export default dynamicPortConfig;

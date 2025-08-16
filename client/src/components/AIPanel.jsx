@@ -20,6 +20,7 @@ import {
 } from 'lucide-react'
 import { useSettings } from '../contexts/SettingsContext'
 import { useUserFeedback } from '../utils/userFeedback'
+import dynamicPortConfig from '../utils/portConfig.js';
 
 function AIPanel({ scanResults, onClose }) {
   const { 
@@ -41,12 +42,11 @@ function AIPanel({ scanResults, onClose }) {
   const [inputMessage, setInputMessage] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [isExpanded, setIsExpanded] = useState(false)
-  const [selectedProvider, setSelectedProvider] = useState(() => getValidAIProvider() || 'local')
+  const [selectedProvider, setSelectedProvider] = useState(() => getValidAIProvider() || 'openai')
   const messagesEndRef = useRef(null)
   const inputRef = useRef(null)
 
   const aiProviders = {
-    local: { name: 'Local AI', icon: '🏠', color: 'text-blue-400' },
     openai: { 
       name: 'OpenAI GPT', 
       icon: '🤖', 
@@ -106,29 +106,69 @@ function AIPanel({ scanResults, onClose }) {
 
     setIsLoading(true)
     
-    // Check if we're using mock/local AI
-    const isUsingMockAI = selectedProvider === 'local' || !getValidAIProvider()
-    
-    // Simulate AI analysis delay
-    await new Promise(resolve => setTimeout(resolve, 1500))
+    try {
+      const serverUrl = dynamicPortConfig.getServerUrl();
+      const response = await fetch(`${serverUrl}/api/ai/analyze`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          scanData: scanResults,
+          analysisType: 'initial_insights'
+        })
+      });
 
-    const insights = generateCodeInsights(scanResults)
-    
-    // Add mock data warning if using local AI
-    const content = isUsingMockAI 
-      ? `⚠️ **Mock Data Warning**: You're currently viewing mock analysis data. To get real AI insights, please configure your AI provider in settings.\n\n${insights}`
-      : insights
-    
-    setMessages(prev => [...prev, {
-      id: Date.now(),
-      type: 'ai',
-      content: content,
-      timestamp: new Date(),
-      isInsight: true,
-      isMockData: isUsingMockAI
-    }])
-    
-    setIsLoading(false)
+      if (response.ok) {
+        const result = await response.json();
+        if (result.success && result.insights) {
+          setMessages(prev => [...prev, {
+            id: Date.now(),
+            type: 'ai',
+            content: result.insights,
+            timestamp: new Date(),
+            isInsight: true,
+            isRealData: true
+          }]);
+        } else {
+          // Fallback to local analysis if backend fails
+          const insights = generateCodeInsights(scanResults);
+          setMessages(prev => [...prev, {
+            id: Date.now(),
+            type: 'ai',
+            content: `⚠️ **Backend AI Analysis Unavailable**: Using local analysis.\n\n${insights}`,
+            timestamp: new Date(),
+            isInsight: true,
+            isFallback: true
+          }]);
+        }
+      } else {
+        // Fallback to local analysis
+        const insights = generateCodeInsights(scanResults);
+        setMessages(prev => [...prev, {
+          id: Date.now(),
+          type: 'ai',
+          content: `⚠️ **Backend AI Analysis Unavailable**: Using local analysis.\n\n${insights}`,
+          timestamp: new Date(),
+          isInsight: true,
+          isFallback: true
+        }]);
+      }
+    } catch (error) {
+      console.error('AI analysis failed:', error);
+      // Fallback to local analysis
+      const insights = generateCodeInsights(scanResults);
+      setMessages(prev => [...prev, {
+        id: Date.now(),
+        type: 'ai',
+        content: `⚠️ **AI Analysis Error**: ${error.message}\n\nUsing local analysis:\n\n${insights}`,
+        timestamp: new Date(),
+        isInsight: true,
+        isError: true
+      }]);
+    } finally {
+      setIsLoading(false);
+    }
   }
 
   const generateCodeInsights = (data) => {
@@ -210,16 +250,42 @@ function AIPanel({ scanResults, onClose }) {
     setIsLoading(true)
 
     try {
-      const response = await callAIAPI(inputMessage, selectedProvider)
-      
-      const aiResponse = {
-        id: Date.now() + 1,
-        type: 'ai',
-        content: response,
-        timestamp: new Date()
-      }
+      const serverUrl = dynamicPortConfig.getServerUrl();
+      const response = await fetch(`${serverUrl}/api/ai/send`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          message: inputMessage,
+          scanData: scanResults,
+          provider: selectedProvider,
+          context: {
+            files: scanResults?.files?.length || 0,
+            conflicts: scanResults?.conflicts?.length || 0,
+            totalLines: scanResults?.metrics?.linesOfCode || 0
+          }
+        })
+      });
 
-      setMessages(prev => [...prev, aiResponse])
+      if (response.ok) {
+        const result = await response.json();
+        if (result.success && result.response) {
+          const aiResponse = {
+            id: Date.now() + 1,
+            type: 'ai',
+            content: result.response,
+            timestamp: new Date(),
+            isRealData: true
+          };
+          setMessages(prev => [...prev, aiResponse]);
+        } else {
+          throw new Error(result.error || 'No response from AI service');
+        }
+      } else {
+        const errorData = await response.json();
+        throw new Error(errorData.error || `HTTP ${response.status}`);
+      }
     } catch (error) {
       console.error('Error getting AI response:', error)
       
@@ -237,7 +303,7 @@ function AIPanel({ scanResults, onClose }) {
       setMessages(prev => [...prev, {
         id: Date.now() + 1,
         type: 'ai',
-        content: 'Sorry, I encountered an error while processing your request. Please check your API configuration in settings.',
+        content: `Sorry, I encountered an error while processing your request: ${error.message}\n\nPlease check your AI configuration in settings or try again later.`,
         timestamp: new Date(),
         isError: true
       }])
@@ -246,173 +312,37 @@ function AIPanel({ scanResults, onClose }) {
     }
   }
 
+  // Note: All AI API calls are now handled by the backend
+  // These functions are kept for reference but not used
   const callAIAPI = async (message, provider) => {
-    if (provider === 'local') {
-      // Simulate local AI response
-      await new Promise(resolve => setTimeout(resolve, 1500))
-      return generateLocalResponse(message)
-    }
-
-    const providerConfig = aiProviders[provider]
-    if (!providerConfig?.apiKey) {
-      throw new Error(`No API key configured for ${provider}`)
-    }
-
-    const context = scanResults ? `Codebase Context: ${JSON.stringify(scanResults, null, 2)}\n\nUser Question: ${message}` : message
-    
-    switch (provider) {
-      case 'openai':
-        return await callOpenAI(providerConfig.apiKey, providerConfig.model, context)
-      case 'anthropic':
-        return await callAnthropic(providerConfig.apiKey, providerConfig.model, context)
-      case 'google':
-        return await callGoogle(providerConfig.apiKey, providerConfig.model, context)
-      case 'custom':
-        return await callCustomAPI(providerConfig.apiKey, context)
-      default:
-        throw new Error(`Unsupported provider: ${provider}`)
-    }
+    // This function is no longer used - all AI calls go through backend
+    throw new Error('AI calls should go through backend API')
   }
 
   const callOpenAI = async (apiKey, model, message) => {
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`
-      },
-      body: JSON.stringify({
-        model: model || 'gpt-3.5-turbo',
-        messages: [
-          {
-            role: 'system',
-            content: 'You are a helpful AI code analysis assistant. Provide clear, actionable insights about code structure, potential improvements, and best practices.'
-          },
-          {
-            role: 'user',
-            content: message
-          }
-        ],
-        max_tokens: settings.aiResponseLength === 'long' ? 1000 : 500,
-        temperature: 0.7
-      })
-    })
-
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}))
-      if (response.status === 401) {
-        throw new Error('Invalid API key. Please check your OpenAI API key in settings.')
-      } else if (response.status === 429) {
-        throw new Error('Rate limit exceeded. Please wait a moment and try again.')
-      } else if (response.status === 400) {
-        throw new Error(`OpenAI API error: ${errorData.error?.message || 'Invalid request'}`)
-      } else {
-        throw new Error(`OpenAI API error: ${response.status} - ${errorData.error?.message || 'Unknown error'}`)
-      }
-    }
-
-    const data = await response.json()
-    return data.choices[0]?.message?.content || 'No response from OpenAI'
+    // This function is no longer used - all AI calls go through backend
+    throw new Error('AI calls should go through backend API')
   }
 
   const callAnthropic = async (apiKey, model, message) => {
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01'
-      },
-      body: JSON.stringify({
-        model: model || 'claude-3-haiku-20240307',
-        max_tokens: settings.aiResponseLength === 'long' ? 1000 : 500,
-        messages: [
-          {
-            role: 'user',
-            content: message
-          }
-        ]
-      })
-    })
-
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}))
-      if (response.status === 401) {
-        throw new Error('Invalid API key. Please check your Anthropic API key in settings.')
-      } else if (response.status === 429) {
-        throw new Error('Rate limit exceeded. Please wait a moment and try again.')
-      } else if (response.status === 400) {
-        throw new Error(`Anthropic API error: ${errorData.error?.message || 'Invalid request'}`)
-      } else {
-        throw new Error(`Anthropic API error: ${response.status} - ${errorData.error?.message || 'Unknown error'}`)
-      }
-    }
-
-    const data = await response.json()
-    return data.content[0]?.text || 'No response from Claude'
+    // This function is no longer used - all AI calls go through backend
+    throw new Error('AI calls should go through backend API')
   }
 
   const callGoogle = async (apiKey, model, message) => {
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model || 'gemini-pro'}:generateContent?key=${apiKey}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        contents: [
-          {
-            parts: [
-              {
-                text: message
-              }
-            ]
-          }
-        ],
-        generationConfig: {
-          maxOutputTokens: settings.aiResponseLength === 'long' ? 1000 : 500,
-          temperature: 0.7
-        }
-      })
-    })
-
-    if (!response.ok) {
-      throw new Error(`Google API error: ${response.status}`)
-    }
-
-    const data = await response.json()
-    return data.candidates[0]?.content?.parts[0]?.text || 'No response from Google'
+    // This function is no longer used - all AI calls go through backend
+    throw new Error('AI calls should go through backend API')
   }
 
   const callCustomAPI = async (apiKey, message) => {
-    // This would be configured based on user's custom API endpoint
-    // For now, we'll simulate a response
-    await new Promise(resolve => setTimeout(resolve, 1000))
-    return `Custom API Response: ${message.substring(0, 100)}...`
+    // This function is no longer used - all AI calls go through backend
+    throw new Error('AI calls should go through backend API')
   }
 
   const generateLocalResponse = (message) => {
-    // Enhanced local response generation based on scan results
-    if (!scanResults) {
-      return "I don't have any code analysis data to work with. Please run a scan first to analyze your codebase."
-    }
-
-    const files = scanResults.files || []
-    const conflicts = scanResults.conflicts || []
-    
-    if (message.toLowerCase().includes('complexity') || message.toLowerCase().includes('complex')) {
-      const complexFiles = files.filter(f => (f.complexity || 0) > 5)
-      return `I found ${complexFiles.length} files with high complexity (>5). These files might benefit from refactoring to improve maintainability.`
-    }
-    
-    if (message.toLowerCase().includes('conflict') || message.toLowerCase().includes('issue')) {
-      return `I detected ${conflicts.length} potential conflicts in your codebase. These should be reviewed and resolved to ensure code quality.`
-    }
-    
-    if (message.toLowerCase().includes('structure') || message.toLowerCase().includes('architecture')) {
-      return `Your codebase contains ${files.length} files with a total of ${files.reduce((sum, f) => sum + (f.lines || 0), 0)} lines of code. The structure appears to be well-organized.`
-    }
-    
-    return `I understand your question about "${message}". Based on the scan results, I can help you analyze your codebase structure, identify potential improvements, and answer specific questions about your code.`
+    // This function is no longer used since we're using real backend calls
+    // Keeping for potential fallback scenarios
+    return `Local analysis: ${message.substring(0, 100)}...`
   }
 
   const handleKeyPress = (e) => {
@@ -476,12 +406,6 @@ function AIPanel({ scanResults, onClose }) {
               <div className="flex items-center space-x-1 mb-2">
                 <Sparkles className="w-4 h-4 text-purple-400" />
                 <span className="text-xs text-purple-400 font-medium">AI Insights</span>
-                {message.isMockData && (
-                  <div className="flex items-center space-x-1 ml-2 px-2 py-1 bg-yellow-500/20 border border-yellow-500/30 rounded text-xs">
-                    <AlertTriangle className="w-3 h-3 text-yellow-400" />
-                    <span className="text-yellow-200">Mock Data</span>
-                  </div>
-                )}
               </div>
             )}
             
@@ -526,6 +450,24 @@ function AIPanel({ scanResults, onClose }) {
                     </li>
                   ))}
                 </ul>
+              </div>
+            )}
+            {message.isError && (
+              <div className="flex items-center space-x-1 px-2 py-1 bg-red-500/20 border border-red-500/30 rounded text-xs">
+                <AlertTriangle className="w-3 h-3 text-red-400" />
+                <span className="text-red-200">Error</span>
+              </div>
+            )}
+            {message.isFallback && (
+              <div className="flex items-center space-x-1 px-2 py-1 bg-yellow-500/20 border border-yellow-500/30 rounded text-xs">
+                <AlertTriangle className="w-3 h-3 text-yellow-400" />
+                <span className="text-yellow-200">Fallback</span>
+              </div>
+            )}
+            {message.isRealData && (
+              <div className="flex items-center space-x-1 px-2 py-1 bg-green-500/20 border border-green-500/30 rounded text-xs">
+                <CheckCircle className="w-3 h-3 text-green-400" />
+                <span className="text-green-200">Real Data</span>
               </div>
             )}
           </div>
@@ -578,12 +520,6 @@ function AIPanel({ scanResults, onClose }) {
               <div className="flex items-center space-x-1">
                 <div className="w-2 h-2 bg-green-400 rounded-full"></div>
                 <span className="text-xs text-gray-400">Online</span>
-                {selectedProvider === 'local' && (
-                  <div className="flex items-center space-x-1 ml-2 px-2 py-1 bg-yellow-500/20 border border-yellow-500/30 rounded text-xs">
-                    <AlertTriangle className="w-3 h-3 text-yellow-400" />
-                    <span className="text-yellow-200">Mock</span>
-                  </div>
-                )}
               </div>
             </div>
           </div>

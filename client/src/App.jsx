@@ -26,6 +26,7 @@ import { ScanningLoader, LoadingOverlay } from './components/Loading'
 import Tooltip from './components/Tooltip'
 import useWebSocket from './hooks/useWebSocket'
 import { useUserFeedback, handleErrorWithFeedback, handleSuccessWithFeedback } from './utils/userFeedback'
+import dynamicPortConfig from './utils/portConfig.js';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -47,18 +48,38 @@ function AppContent() {
   const { toast } = useToast()
   const feedback = useUserFeedback()
 
-  // WebSocket connection for real-time updates
-    // Get port configuration
-  const getPortConfig = () => {
-    if (typeof __PORT_CONFIG__ !== 'undefined') {
-      return __PORT_CONFIG__;
-    }
-    return {
-      server: process.env.REACT_APP_SERVER_PORT || 3000
-    };
-  };
+  // Get port configuration
+  const [portConfig, setPortConfig] = useState({
+    server: 3000,
+    client: 5173,
+    websocket: 3001
+  });
+  const [portConfigLoaded, setPortConfigLoaded] = useState(false);
 
-  const portConfig = getPortConfig();
+  useEffect(() => {
+    const initializePorts = async () => {
+      try {
+        await dynamicPortConfig.initialize();
+        const config = dynamicPortConfig.getConfig();
+        setPortConfig(config);
+        setPortConfigLoaded(true);
+        console.log('🔧 Dynamic port configuration loaded:', config);
+      } catch (error) {
+        console.error('❌ Failed to initialize port configuration:', error);
+        // Keep the default configuration
+        setPortConfigLoaded(true);
+      }
+    };
+
+    initializePorts();
+  }, []);
+
+  console.log('🔧 Port configuration:', portConfig);
+  console.log('🔧 Environment variables:', {
+    VITE_SERVER_PORT: import.meta.env.VITE_SERVER_PORT,
+    NODE_ENV: import.meta.env.NODE_ENV
+  });
+  
   const { isConnected, lastMessage } = useWebSocket(`ws://localhost:${portConfig.server}/ws`)
 
   // Health check query
@@ -162,43 +183,63 @@ function AppContent() {
   }, [lastMessage, feedback])
 
   const handleScan = async () => {
+    if (!scanPath || isScanning || !portConfigLoaded) return;
+    
     try {
-      setIsScanning(true)
-      setScanProgress({ stage: 'initializing', progress: 0, files: 0 })
-      feedback.scanStarted()
+      setIsScanning(true);
+      setScanProgress({ stage: 'initializing', progress: 0, files: 0 });
+      feedback.scanStarted();
       
-      const response = await fetch(`http://localhost:${portConfig.server}/api/scan`, {
+      console.log('🔍 Starting scan with path:', scanPath);
+      console.log('🔍 Port config:', portConfig);
+      
+      const serverUrl = dynamicPortConfig.getServerUrl();
+      console.log('🔍 Request URL:', `${serverUrl}/api/scan`);
+      
+      const requestBody = {
+        path: scanPath,
+        options: {
+          patterns: ['**/*.{js,jsx,ts,tsx}'],
+          excludePatterns: ['node_modules/**', 'dist/**', 'build/**']
+        }
+      };
+      
+      console.log('🔍 Request body:', JSON.stringify(requestBody, null, 2));
+      
+      const response = await fetch(`${serverUrl}/api/scan`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          path: scanPath,
-          options: {
-            patterns: ['**/*.{js,jsx,ts,tsx}'],
-            excludePatterns: ['node_modules/**', 'dist/**', 'build/**']
-          }
-        }),
-      })
+        body: JSON.stringify(requestBody),
+      });
+      
+      console.log('🔍 Response status:', response.status, response.statusText);
+      console.log('🔍 Response headers:', Object.fromEntries(response.headers.entries()));
       
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+        const errorText = await response.text();
+        console.log('🔍 Error response text:', errorText);
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
       
-      const result = await response.json()
+      const result = await response.json();
+      console.log('🔍 Response result:', result);
+      
       if (result.success) {
-        setScanResults(result.data)
-        feedback.scanCompleted(result.data.files?.length || 0, result.data.conflicts?.length || 0)
+        setScanResults(result.data);
+        feedback.scanCompleted(result.data.files?.length || 0, result.data.conflicts?.length || 0);
       } else {
-        console.error('Scan failed:', result.error)
-        feedback.scanFailed(result.error || 'Failed to scan project')
+        console.error('Scan failed:', result.error);
+        feedback.scanFailed(result.error || 'Failed to scan project');
       }
     } catch (error) {
-      console.error('Scan error:', error)
-      handleErrorWithFeedback(error, 'scan operation', feedback)
+      console.error('🔍 Scan error details:', error);
+      console.error('🔍 Error stack:', error.stack);
+      handleErrorWithFeedback(error, 'scan operation', feedback);
     } finally {
-      setIsScanning(false)
-      setScanProgress({ stage: 'finalizing', progress: 100, files: 0 })
+      setIsScanning(false);
+      setScanProgress({ stage: 'finalizing', progress: 100, files: 0 });
     }
   }
 

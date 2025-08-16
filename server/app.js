@@ -27,6 +27,7 @@ import AIAnalysisFormatter from '../core/ai-analysis.js';
 import WebSocketService from './services/websocket.js';
 import semanticSearchService from './services/semanticSearch.js';
 import { getPortConfig, validatePortConfig } from './config/ports.js';
+import dynamicPortManager from './services/portManager.js';
 
 // Logger setup
 const logger = winston.createLogger({
@@ -56,13 +57,22 @@ app.use(helmet({
   contentSecurityPolicy: false,
   crossOriginEmbedderPolicy: false
 }));
-app.use(cors({
-  origin: process.env.CLIENT_URL || 'http://localhost:5173',
-  credentials: true
-}));
-app.use(express.json({ limit: '10mb' }));
-app.use(cookieParser());
-app.use(express.static('public'));
+  // Middleware
+  app.use(express.json({ limit: '10mb' }));
+  app.use(cookieParser());
+  app.use(express.static('public'));
+  
+  // Initialize dynamic port manager first
+  await dynamicPortManager.initialize();
+  const portConfig = dynamicPortManager.getConfig();
+  
+  // CORS configuration (after port manager is initialized)
+  app.use(cors({
+    origin: dynamicPortManager.getClientUrl(),
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
+  }));
 
 // Configure multer for file uploads
 const uploadDir = path.join(__dirname, 'uploads');
@@ -171,104 +181,107 @@ scanQueue.on('jobCancelled', (data) => {
 app.use('/api/auth', authRoutes);
 
 // API Routes
-app.get('/api/health', async (req, res) => {
-  try {
-    // Basic health info
-    const health = {
-      status: 'ok',
-      message: 'Manito API Server',
-      version: '1.0.0',
-      timestamp: new Date().toISOString(),
-      uptime: Math.floor(process.uptime()),
-      environment: process.env.NODE_ENV || 'development',
-      authenticated: !!req.user
-    };
-
-    // Detailed health checks (for authenticated requests or internal monitoring)
-    if (req.query.detailed === 'true' || req.headers['x-health-check'] === 'internal') {
-      const memory = process.memoryUsage();
-      const cpu = process.cpuUsage();
+  // Health endpoint
+  app.get('/api/health', async (req, res) => {
+    try {
+      const detailed = req.query.detailed === 'true';
       
-      health.system = {
-        memory: {
-          used: Math.round(memory.heapUsed / 1024 / 1024),
-          total: Math.round(memory.heapTotal / 1024 / 1024),
-          external: Math.round(memory.external / 1024 / 1024),
-          rss: Math.round(memory.rss / 1024 / 1024)
-        },
-        cpu: {
-          user: Math.round(cpu.user / 1000),
-          system: Math.round(cpu.system / 1000)
-        }
+      const health = {
+        status: 'ok',
+        message: 'Manito API Server',
+        version: '1.0.0',
+        timestamp: new Date().toISOString(),
+        uptime: process.uptime(),
+        environment: process.env.NODE_ENV || 'development',
+        authenticated: false
       };
 
-      health.services = {
-        websocket: wsService.getHealth(),
-        scanQueue: {
-          status: scanQueue ? 'ok' : 'error',
-          ...scanQueue?.getQueueStatus() || {}
-        },
-        semanticSearch: {
-          status: 'ok',
-          features: ['full-text-search', 'global-search', 'advanced-filters', 'search-analytics']
-        }
-      };
-
-      // Test database connection with enhanced status
-      try {
-        const dbHealth = await enhancedDb.health();
-        health.services.database = {
-          status: dbHealth.connected ? 'ok' : 'error',
-          connected: dbHealth.connected,
-          pool: dbHealth.pool,
-          cache: dbHealth.cache,
-          serverTime: dbHealth.serverTime,
-          version: dbHealth.version,
-          message: dbHealth.connected ? 'Database connected and healthy' : 'Database connection failed'
-        };
-        
-        // Update overall health status based on database
-        if (!dbHealth.connected) {
-          health.status = 'degraded';
-        }
-      } catch (error) {
-        health.services.database = { 
-          status: 'error', 
-          connected: false,
-          message: error.message,
-          pool: null,
-          cache: null
-        };
-        health.status = 'degraded';
-      }
-
-      // Test AI service
-      try {
-        const providers = aiService.getAvailableProviders();
-        health.services.ai = { 
-          status: 'ok', 
-          providers: providers.length 
-        };
-      } catch (error) {
-        health.services.ai = { 
-          status: 'error', 
-          message: error.message 
+      if (detailed) {
+        health.details = {
+          memory: process.memoryUsage(),
+          cpu: process.cpuUsage(),
+          platform: process.platform,
+          nodeVersion: process.version
         };
       }
+
+      res.json(health);
+    } catch (error) {
+      res.status(500).json({
+        status: 'error',
+        message: 'Health check failed',
+        error: error.message,
+        timestamp: new Date().toISOString()
+      });
     }
+  });
 
-    // Set appropriate HTTP status
-    const httpStatus = health.status === 'ok' ? 200 : 
-                      health.status === 'degraded' ? 200 : 503;
-    
-    res.status(httpStatus).json(health);
+  // Port configuration endpoint
+  app.get('/api/ports', (req, res) => {
+    try {
+      const config = dynamicPortManager.exportForClient();
+      res.json({
+        success: true,
+        data: config
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: 'Port configuration not available'
+      });
+    }
+  });
+
+// Migration endpoints
+app.get('/api/migrations/status', async (req, res) => {
+  try {
+    const status = await migrations.getMigrationStatus();
+    res.json({
+      success: true,
+      data: status
+    });
   } catch (error) {
-    logger.error('Health check failed', error);
-    res.status(503).json({
-      status: 'error',
-      message: 'Health check failed',
-      timestamp: new Date().toISOString(),
-      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal error'
+    logger.error('Migration status check failed', { error: error.message });
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get migration status',
+      message: error.message
+    });
+  }
+});
+
+app.post('/api/migrations/run', async (req, res) => {
+  try {
+    const result = await migrations.runMigrations();
+    res.json({
+      success: true,
+      message: result.message,
+      data: result
+    });
+  } catch (error) {
+    logger.error('Migration execution failed', { error: error.message });
+    res.status(500).json({
+      success: false,
+      error: 'Migration failed',
+      message: error.message
+    });
+  }
+});
+
+app.get('/api/migrations/reset', async (req, res) => {
+  try {
+    // Reset circuit breaker
+    migrations.circuitBreaker.onSuccess();
+    res.json({
+      success: true,
+      message: 'Migration circuit breaker reset successfully'
+    });
+  } catch (error) {
+    logger.error('Migration reset failed', { error: error.message });
+    res.status(500).json({
+      success: false,
+      error: 'Migration reset failed',
+      message: error.message
     });
   }
 });
@@ -974,7 +987,13 @@ app.get('/api/search', async (req, res) => {
     }
     
     // Log search query
-    await semanticSearchService.logSearch(query, userIdParam, type, results.total);
+    await semanticSearchService.logSearch({
+      query,
+      userId: userIdParam,
+      resultCount: results.total || results.data?.total || 0,
+      duration: 0,
+      entityTypes: results.data?.entityTypes || []
+    });
     
     res.json({
       success: true,
@@ -1483,27 +1502,24 @@ app.use((req, res) => {
 
 // Initialize port configuration
 let PORT;
-let portConfig;
 
 try {
   // Get port configuration with automatic conflict resolution
-  portConfig = await getPortConfig(process.env.NODE_ENV || 'development');
+  PORT = dynamicPortManager.getServerPort();
   
   // Validate configuration
   const validation = validatePortConfig(portConfig);
   if (!validation.valid) {
-    logger.warn('⚠️  Port configuration issues:');
+    logger.warn('⚠️  Port configuration validation issues:');
     validation.issues.forEach(issue => logger.warn(`  - ${issue}`));
   }
   
-  PORT = portConfig.server;
-  
   logger.info(`🔧 Environment: ${process.env.NODE_ENV || 'development'}`);
   logger.info(`📊 Port configuration:`, portConfig);
-  
+  logger.info(`Manito API Server running on port ${PORT}`);
 } catch (error) {
-  logger.error('❌ Failed to configure ports, using defaults:', error);
-  PORT = process.env.PORT || 3000;
+  logger.error('❌ Failed to initialize port configuration:', error);
+  process.exit(1);
 }
 
 server.listen(PORT, async () => {
@@ -1527,6 +1543,7 @@ server.listen(PORT, async () => {
   logger.info('  GET  /api/scan/jobs/:jobId');
   logger.info('  DELETE /api/scan/jobs/:jobId');
   logger.info('  GET  /api/metrics');
+  logger.info('  GET  /api/ports'); // Added this line
   logger.info('  GET  /api/projects');
   logger.info('  GET  /api/projects/:id');
   logger.info('  GET  /api/projects/:id/scans');

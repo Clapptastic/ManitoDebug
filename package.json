@@ -5,7 +5,7 @@
   "description": "Advanced code analysis and debugging tool",
   "main": "index.js",
   "scripts": {
-    "dev": "concurrently \"npm run dev:client\" \"npm run dev:server\"",
+    "dev": "concurrently --kill-others-on-fail --prefix \"[{name}]\" --names \"server,client\" \"npm run dev:server\" \"npm run dev:client\"",
     "dev:client": "cd client && npm run dev",
     "dev:server": "cd server && npm run dev",
     "build": "npm run build:client && npm run build:server",
@@ -16,7 +16,10 @@
     "test:client": "cd client && npm test",
     "test:server": "cd server && npm test",
     "start": "cd server && npm start",
-    "install:all": "npm install && cd client && npm install && cd ../server && npm install && cd ../core && npm install"
+    "install:all": "npm install && cd client && npm install && cd ../server && npm install && cd ../core && npm install",
+    "setup": "node scripts/setup-fullstack.js",
+    "test:e2e": "node scripts/e2e-test-suite.js",
+    "start:fullstack": "./start-fullstack.sh"
   },
   "keywords": [
     "code-analysis",
@@ -34,5 +37,8 @@
     "client",
     "server",
     "core"
-  ]
+  ],
+  "dependencies": {
+    "node-fetch": "^3.3.2"
+  }
 }
