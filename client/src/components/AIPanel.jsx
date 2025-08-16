@@ -106,17 +106,26 @@ function AIPanel({ scanResults, onClose }) {
 
     setIsLoading(true)
     
+    // Check if we're using mock/local AI
+    const isUsingMockAI = selectedProvider === 'local' || !getValidAIProvider()
+    
     // Simulate AI analysis delay
     await new Promise(resolve => setTimeout(resolve, 1500))
 
     const insights = generateCodeInsights(scanResults)
     
+    // Add mock data warning if using local AI
+    const content = isUsingMockAI 
+      ? `⚠️ **Mock Data Warning**: You're currently viewing mock analysis data. To get real AI insights, please configure your AI provider in settings.\n\n${insights}`
+      : insights
+    
     setMessages(prev => [...prev, {
       id: Date.now(),
       type: 'ai',
-      content: insights,
+      content: content,
       timestamp: new Date(),
-      isInsight: true
+      isInsight: true,
+      isMockData: isUsingMockAI
     }])
     
     setIsLoading(false)
@@ -467,6 +476,12 @@ function AIPanel({ scanResults, onClose }) {
               <div className="flex items-center space-x-1 mb-2">
                 <Sparkles className="w-4 h-4 text-purple-400" />
                 <span className="text-xs text-purple-400 font-medium">AI Insights</span>
+                {message.isMockData && (
+                  <div className="flex items-center space-x-1 ml-2 px-2 py-1 bg-yellow-500/20 border border-yellow-500/30 rounded text-xs">
+                    <AlertTriangle className="w-3 h-3 text-yellow-400" />
+                    <span className="text-yellow-200">Mock Data</span>
+                  </div>
+                )}
               </div>
             )}
             
@@ -563,6 +578,12 @@ function AIPanel({ scanResults, onClose }) {
               <div className="flex items-center space-x-1">
                 <div className="w-2 h-2 bg-green-400 rounded-full"></div>
                 <span className="text-xs text-gray-400">Online</span>
+                {selectedProvider === 'local' && (
+                  <div className="flex items-center space-x-1 ml-2 px-2 py-1 bg-yellow-500/20 border border-yellow-500/30 rounded text-xs">
+                    <AlertTriangle className="w-3 h-3 text-yellow-400" />
+                    <span className="text-yellow-200">Mock</span>
+                  </div>
+                )}
               </div>
             </div>
           </div>

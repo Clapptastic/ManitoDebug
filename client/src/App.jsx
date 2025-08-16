@@ -19,6 +19,7 @@ import MetricsPanel from './components/MetricsPanel'
 import ConflictsList from './components/ConflictsList'
 import AIPanel from './components/AIPanel'
 import SettingsModal from './components/SettingsModal'
+import MockDataAlert from './components/MockDataAlert'
 import { ToastProvider, useToast } from './components/Toast'
 import { SettingsProvider } from './contexts/SettingsContext'
 import { ScanningLoader, LoadingOverlay } from './components/Loading'
@@ -400,6 +401,13 @@ function AppContent() {
                 </div>
               ) : (
                 <>
+                  {/* Mock Data Alert */}
+                  <MockDataAlert 
+                    scanResults={scanResults}
+                    onOpenSettings={() => setShowSettings(true)}
+                    onRunScan={() => handleScan()}
+                  />
+                  
                   {selectedTab === 'graph' && (
                     <GraphVisualization data={scanResults} />
                   )}
