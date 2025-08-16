@@ -1,73 +1,38 @@
 {
-  "name": "manito",
+  "name": "manito-debug",
   "version": "1.0.0",
-  "description": "AI-powered code analysis and debugging platform",
-  "private": true,
-  "workspaces": [
-    "server",
-    "client",
-    "core",
-    "cli",
-    "vscode-extension"
-  ],
+  "type": "module",
+  "description": "Advanced code analysis and debugging tool",
+  "main": "index.js",
   "scripts": {
-    "dev": "echo '🚀 Starting ManitoDebug Development Environment...' && node scripts/interactive-dev.js",
-    "dev:direct": "echo '📦 Starting development servers...' && concurrently \"npm run dev -w server\" \"npm run dev -w client\"",
-    "build": "npm run build -w client && npm run build -w server",
-    "start": "npm start -w server",
-    "test": "NODE_OPTIONS=--experimental-vm-modules jest",
-    "test:watch": "NODE_OPTIONS=--experimental-vm-modules jest --watch",
-    "test:coverage": "NODE_OPTIONS=--experimental-vm-modules jest --coverage",
-    "test:server": "NODE_OPTIONS=--experimental-vm-modules jest --selectProjects server",
-    "test:client": "NODE_OPTIONS=--experimental-vm-modules jest --selectProjects client",
-    "test:core": "NODE_OPTIONS=--experimental-vm-modules jest --selectProjects core",
-    "test:cli": "NODE_OPTIONS=--experimental-vm-modules jest --selectProjects cli",
-    "lint": "eslint . --ext .js,.jsx,.ts,.tsx",
-    "lint:fix": "eslint . --ext .js,.jsx,.ts,.tsx --fix",
-    "format": "prettier --write .",
-    "typecheck": "tsc --noEmit --skipLibCheck",
-    "install-extension": "node scripts/install-extension.js",
-    "package-extension": "cd vscode-extension && npx vsce package",
-    "postinstall": "node scripts/check-vscode.js",
-    "docker:dev": "./scripts/dev-docker.sh up",
-    "docker:dev:detach": "./scripts/dev-docker.sh up --detach",
-    "docker:dev:down": "./scripts/dev-docker.sh down",
-    "docker:dev:restart": "./scripts/dev-docker.sh restart",
-    "docker:dev:logs": "./scripts/dev-docker.sh logs",
-    "docker:dev:shell": "./scripts/dev-docker.sh shell",
-    "docker:dev:test": "./scripts/dev-docker.sh test",
-    "docker:dev:status": "./scripts/dev-docker.sh status",
-    "docker:dev:build": "./scripts/dev-docker.sh build",
-    "docker:dev:clean": "./scripts/dev-docker.sh clean"
+    "dev": "concurrently \"npm run dev:client\" \"npm run dev:server\"",
+    "dev:client": "cd client && npm run dev",
+    "dev:server": "cd server && npm run dev",
+    "build": "npm run build:client && npm run build:server",
+    "build:client": "cd client && npm run build",
+    "build:server": "cd server && npm run build",
+    "test": "npm run test:core && npm run test:client && npm run test:server",
+    "test:core": "cd core && npm test",
+    "test:client": "cd client && npm test",
+    "test:server": "cd server && npm test",
+    "start": "cd server && npm start",
+    "install:all": "npm install && cd client && npm install && cd ../server && npm install && cd ../core && npm install"
   },
+  "keywords": [
+    "code-analysis",
+    "debugging",
+    "static-analysis",
+    "dependency-analysis",
+    "ai-assisted"
+  ],
+  "author": "ManitoDebug Team",
+  "license": "MIT",
   "devDependencies": {
-    "@babel/core": "^7.22.0",
-    "@babel/preset-env": "^7.22.0",
-    "@babel/preset-react": "^7.22.0",
-    "@testing-library/jest-dom": "^6.0.0",
-    "@testing-library/react": "^14.0.0",
-    "@testing-library/user-event": "^14.4.0",
-    "@types/node": "^20.0.0",
-    "@types/supertest": "^6.0.0",
-    "babel-jest": "^29.5.0",
-    "concurrently": "^8.2.0",
-    "eslint": "^8.57.0",
-    "eslint-config-prettier": "^9.0.0",
-    "eslint-plugin-react": "^7.33.0",
-    "eslint-plugin-react-hooks": "^4.6.0",
-    "identity-obj-proxy": "^3.0.0",
-    "jest": "^29.5.0",
-    "jest-environment-jsdom": "^29.5.0",
-    "openai": "^5.12.2",
-    "prettier": "^3.0.0",
-    "supertest": "^6.3.0",
-    "ts-jest": "^29.4.1",
-    "typescript": "^5.0.0"
+    "concurrently": "^8.2.0"
   },
-  "engines": {
-    "node": ">=20.0.0"
-  },
-  "dependencies": {
-    "pg": "^8.16.3"
-  }
+  "workspaces": [
+    "client",
+    "server",
+    "core"
+  ]
 }
