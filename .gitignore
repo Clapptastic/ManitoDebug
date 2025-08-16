@@ -62,3 +62,7 @@ __tests__/
 .parcel-cache/
 .eslintcache
 node_modules
+
+# Upload files
+server/uploads/
+server/uploads/extracted/
