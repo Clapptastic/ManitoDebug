@@ -344,14 +344,15 @@ function AppContent() {
         onClose={() => setShowSettings(false)}
       />
     </div>
-    </ToastProvider>
   )
 }
 
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <AppContent />
+      <ToastProvider>
+        <AppContent />
+      </ToastProvider>
     </QueryClientProvider>
   )
 }

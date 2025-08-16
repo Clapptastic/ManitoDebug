@@ -28,6 +28,9 @@ COPY --chown=appuser:nodejs server/package*.json ./server/
 COPY --chown=appuser:nodejs client/package*.json ./client/
 COPY --chown=appuser:nodejs cli/package*.json ./cli/
 
+# Copy scripts needed for postinstall
+COPY --chown=appuser:nodejs scripts/ ./scripts/
+
 # Install production dependencies with security audit
 ENV NODE_ENV=production
 ENV SKIP_VSCODE_CHECK=true
@@ -40,12 +43,25 @@ FROM base AS builder
 USER appuser
 WORKDIR /app
 
-# Copy dependencies and source code
-COPY --from=deps --chown=appuser:nodejs /app/node_modules ./node_modules
+# Copy package files for dev dependencies
+COPY --chown=appuser:nodejs package*.json ./
+COPY --chown=appuser:nodejs core/package*.json ./core/
+COPY --chown=appuser:nodejs server/package*.json ./server/
+COPY --chown=appuser:nodejs client/package*.json ./client/
+COPY --chown=appuser:nodejs cli/package*.json ./cli/
+COPY --chown=appuser:nodejs scripts/ ./scripts/
+
+# Install all dependencies including dev for building
+ENV NODE_ENV=development
+ENV SKIP_VSCODE_CHECK=true
+RUN npm ci --legacy-peer-deps --include=dev && npm cache clean --force
+
+# Copy source code
 COPY --chown=appuser:nodejs . .
 
 # Build the client application with production optimizations
 WORKDIR /app/client
+ENV NODE_ENV=production
 RUN npm run build
 
 # Core library build (if needed)

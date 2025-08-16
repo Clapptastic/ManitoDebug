@@ -11,8 +11,8 @@
     "vscode-extension"
   ],
   "scripts": {
-    "dev": "node scripts/interactive-dev.js",
-    "dev:direct": "concurrently \"npm run dev -w server\" \"npm run dev -w client\"",
+    "dev": "echo '🚀 Starting ManitoDebug Development Environment...' && node scripts/interactive-dev.js",
+    "dev:direct": "echo '📦 Starting development servers...' && concurrently \"npm run dev -w server\" \"npm run dev -w client\"",
     "build": "npm run build -w client && npm run build -w server",
     "start": "npm start -w server",
     "test": "NODE_OPTIONS=--experimental-vm-modules jest",

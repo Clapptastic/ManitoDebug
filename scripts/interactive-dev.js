@@ -287,7 +287,13 @@ ${colors.cyan}╔═════════════════════
     this.log(`  • Server on http://localhost:3000`)
     this.log(`  • Client on http://localhost:5173`)
     this.log(`  • File watching and hot reloading`)
-    this.log(`\nPress Ctrl+C to stop all services\n`)
+    this.log(`\n${colors.bright}🚀 Quick Access:${colors.reset}`)
+    this.log(`  • ${colors.cyan}🌐 Open UI:${colors.reset} http://localhost:5173`)
+    this.log(`  • ${colors.cyan}🔗 API Health:${colors.reset} http://localhost:3000/api/health`)
+    this.log(`\n${colors.bright}📋 Development Info:${colors.reset}`)
+    this.log(`  • Hot reloading enabled for both client and server`)
+    this.log(`  • Press Ctrl+C to stop all services`)
+    this.log(`  • Check terminal for build status and errors\n`)
 
     // Change to project directory and run direct dev command
     process.chdir(this.projectRoot)
@@ -320,7 +326,15 @@ ${colors.cyan}╔═════════════════════
     this.log(`  • Client: http://localhost:5173`)
     this.log(`  • Server: http://localhost:3000`)
     this.log(`  • Database: localhost:5432`)
-    this.log(`\nPress Ctrl+C to stop all services\n`)
+    this.log(`\n${colors.bright}🚀 Quick Access:${colors.reset}`)
+    this.log(`  • ${colors.cyan}🌐 Open UI:${colors.reset} http://localhost:5173`)
+    this.log(`  • ${colors.cyan}🔗 API Health:${colors.reset} http://localhost:3000/api/health`)
+    this.log(`  • ${colors.cyan}🛢️ Database:${colors.reset} localhost:5432 (manito_dev/manito_dev_password)`)
+    this.log(`  • ${colors.cyan}🔴 Redis:${colors.reset} localhost:6379`)
+    this.log(`\n${colors.bright}📋 Development Info:${colors.reset}`)
+    this.log(`  • All services with hot reloading`)
+    this.log(`  • Press Ctrl+C to stop all services`)
+    this.log(`  • Check terminal for container status and logs\n`)
 
     const dockerProcess = spawn('./scripts/dev-docker.sh', ['up'], {
       stdio: 'inherit',
@@ -351,14 +365,16 @@ ${colors.cyan}╔═════════════════════
     dockerProcess.on('close', (code) => {
       if (code === 0) {
         this.log(`\n${colors.green}${symbols.success} Docker services started in background!${colors.reset}`)
-        this.log(`\n${colors.bright}Access your application:${colors.reset}`)
-        this.log(`  • Client: ${colors.cyan}http://localhost:5173${colors.reset}`)
-        this.log(`  • Server: ${colors.cyan}http://localhost:3000${colors.reset}`)
-        this.log(`  • Database: ${colors.cyan}localhost:5432${colors.reset}`)
-        this.log(`\n${colors.bright}Management commands:${colors.reset}`)
+        this.log(`\n${colors.bright}🚀 Quick Access:${colors.reset}`)
+        this.log(`  • ${colors.cyan}🌐 Open UI:${colors.reset} http://localhost:5173`)
+        this.log(`  • ${colors.cyan}🔗 API Health:${colors.reset} http://localhost:3000/api/health`)
+        this.log(`  • ${colors.cyan}🛢️ Database:${colors.reset} localhost:5432 (manito_dev/manito_dev_password)`)
+        this.log(`  • ${colors.cyan}🔴 Redis:${colors.reset} localhost:6379`)
+        this.log(`\n${colors.bright}📋 Management Commands:${colors.reset}`)
         this.log(`  • View logs: ${colors.yellow}./scripts/dev-docker.sh logs${colors.reset}`)
         this.log(`  • Stop services: ${colors.yellow}./scripts/dev-docker.sh down${colors.reset}`)
         this.log(`  • Check status: ${colors.yellow}./scripts/dev-docker.sh status${colors.reset}`)
+        this.log(`  • Open shell: ${colors.yellow}./scripts/dev-docker.sh shell${colors.reset}`)
       } else {
         this.log(`\n${colors.red}${symbols.error} Failed to start Docker services (exit code: ${code})${colors.reset}`)
       }
@@ -368,6 +384,23 @@ ${colors.cyan}╔═════════════════════
 
   async runDockerWithTesting() {
     this.log(`\n${colors.magenta}${symbols.books} Starting Docker Development with Testing...${colors.reset}\n`)
+    
+    this.log(`${colors.bright}This will start:${colors.reset}`)
+    this.log(`  • Full containerized environment`)
+    this.log(`  • PostgreSQL database with sample data`)
+    this.log(`  • Redis cache`)
+    this.log(`  • Automated test runner with file watching`)
+    this.log(`  • Hot reloading for all services`)
+    this.log(`\n${colors.bright}🚀 Quick Access:${colors.reset}`)
+    this.log(`  • ${colors.cyan}🌐 Open UI:${colors.reset} http://localhost:5173`)
+    this.log(`  • ${colors.cyan}🔗 API Health:${colors.reset} http://localhost:3000/api/health`)
+    this.log(`  • ${colors.cyan}🛢️ Database:${colors.reset} localhost:5432 (manito_dev/manito_dev_password)`)
+    this.log(`  • ${colors.cyan}🔴 Redis:${colors.reset} localhost:6379`)
+    this.log(`\n${colors.bright}📋 Development Info:${colors.reset}`)
+    this.log(`  • Tests will run automatically on file changes`)
+    this.log(`  • All services with hot reloading`)
+    this.log(`  • Press Ctrl+C to stop all services`)
+    this.log(`  • Check terminal for test results and logs\n`)
     
     const dockerProcess = spawn('./scripts/dev-docker.sh', ['up', '--testing'], {
       stdio: 'inherit',
@@ -428,7 +461,14 @@ ${colors.cyan}╔═════════════════════
     
     this.log(`\n${colors.green}${symbols.rocket} Starting with custom ports...${colors.reset}`)
     this.log(`  • Server: http://localhost:${serverPort}`)
-    this.log(`  • Client: http://localhost:${clientPort}\n`)
+    this.log(`  • Client: http://localhost:${clientPort}`)
+    this.log(`\n${colors.bright}🚀 Quick Access:${colors.reset}`)
+    this.log(`  • ${colors.cyan}🌐 Open UI:${colors.reset} http://localhost:${clientPort}`)
+    this.log(`  • ${colors.cyan}🔗 API Health:${colors.reset} http://localhost:${serverPort}/api/health`)
+    this.log(`\n${colors.bright}📋 Development Info:${colors.reset}`)
+    this.log(`  • Hot reloading enabled for both client and server`)
+    this.log(`  • Press Ctrl+C to stop all services`)
+    this.log(`  • Check terminal for build status and errors\n`)
 
     process.env.PORT = serverPort
     process.env.VITE_PORT = clientPort

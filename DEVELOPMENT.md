@@ -2,11 +2,17 @@
 
 ## Docker Development Environment
 
-### Fixed: Docker Profile Flag Issue
+### Fixed: Docker Profile Flag Issue ✅
 
 **Issue**: The `--profile` flag was being used incorrectly in Docker Compose commands, causing "unknown flag" errors.
 
-**Fix Applied**: Updated `scripts/dev-docker.sh` to properly use the `--profile` flag with Docker Compose commands.
+**Root Cause**: The `--profile` flag needs to be placed before the `up` command, not after it.
+
+**Fix Applied**: Updated `scripts/dev-docker.sh` to properly position the `--profile` flag:
+- Changed from: `docker-compose -f $COMPOSE_FILE -p $PROJECT_NAME up --profile $PROFILES`
+- Changed to: `docker-compose -f $COMPOSE_FILE -p $PROJECT_NAME --profile $PROFILES up`
+
+**Status**: ✅ **RESOLVED** - Docker profiles now work correctly
 
 ### Using Docker Profiles
 
@@ -69,3 +75,14 @@ If you encounter Docker issues:
 - **5432** - PostgreSQL
 - **6379** - Redis
 - **9229** - Node.js debugger (when using debug mode)
+
+### Recent Fixes
+
+#### ✅ **ToastProvider Context Issue** (Dec 2024)
+**Issue**: React error "useToast must be used within a ToastProvider" when starting the application.
+
+**Root Cause**: The `ToastProvider` was placed inside the `AppContent` component, but the `useToast` hook was being called before the provider was rendered.
+
+**Fix Applied**: Moved `ToastProvider` to wrap the entire `AppContent` component in the main `App` component.
+
+**Status**: ✅ **RESOLVED** - Toast notifications now work correctly

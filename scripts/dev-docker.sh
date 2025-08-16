@@ -8,6 +8,7 @@ RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
+CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
 # Default configuration
@@ -92,23 +93,28 @@ dev_up() {
     
     echo -e "${BLUE}📦 Building and starting services...${NC}"
     if [[ -n "$PROFILES" ]]; then
-        docker-compose -f $COMPOSE_FILE -p $PROJECT_NAME up $DETACH --profile $PROFILES
+        docker-compose -f $COMPOSE_FILE -p $PROJECT_NAME --profile $PROFILES up $DETACH
     else
         docker-compose -f $COMPOSE_FILE -p $PROJECT_NAME up $DETACH
     fi
     
     if [[ -z "$DETACH" ]]; then
         echo -e "${GREEN}✅ Development environment started!${NC}"
-        echo -e "${BLUE}📱 Access the application:${NC}"
-        echo -e "   • Client (Vite): ${YELLOW}http://localhost:5173${NC}"
-        echo -e "   • Server API: ${YELLOW}http://localhost:3000${NC}"
-        echo -e "   • Health Check: ${YELLOW}http://localhost:3000/api/health${NC}"
+        echo -e "${BLUE}🚀 Quick Access:${NC}"
+        echo -e "   • ${CYAN}🌐 Open UI:${NC} ${YELLOW}http://localhost:5173${NC}"
+        echo -e "   • ${CYAN}🔗 API Health:${NC} ${YELLOW}http://localhost:3000/api/health${NC}"
+        echo -e "   • ${CYAN}🛢️ Database:${NC} ${YELLOW}localhost:5432${NC} (manito_dev/manito_dev_password)"
+        echo -e "   • ${CYAN}🔴 Redis:${NC} ${YELLOW}localhost:6379${NC}"
         echo ""
-        echo -e "${BLUE}🛢️ Database connections:${NC}"
-        echo -e "   • PostgreSQL: ${YELLOW}localhost:5432${NC} (manito_dev/manito_dev_password)"
-        echo -e "   • Redis: ${YELLOW}localhost:6379${NC}"
+        echo -e "${BLUE}📋 Development Info:${NC}"
+        echo -e "   • All services with hot reloading"
+        echo -e "   • Press Ctrl+C to stop all services"
+        echo -e "   • Check terminal for container status and logs"
         echo ""
-        echo -e "${BLUE}Press Ctrl+C to stop all services${NC}"
+        echo -e "${BLUE}🛠️ Management Commands:${NC}"
+        echo -e "   • View logs: ${YELLOW}./scripts/dev-docker.sh logs${NC}"
+        echo -e "   • Check status: ${YELLOW}./scripts/dev-docker.sh status${NC}"
+        echo -e "   • Open shell: ${YELLOW}./scripts/dev-docker.sh shell${NC}"
     fi
 }
 
@@ -147,7 +153,7 @@ dev_shell() {
 # Function to run tests
 dev_test() {
     echo -e "${BLUE}🧪 Running tests in development environment...${NC}"
-    docker-compose -f $COMPOSE_FILE -p $PROJECT_NAME up --profile testing test-runner
+    docker-compose -f $COMPOSE_FILE -p $PROJECT_NAME --profile testing up test-runner
 }
 
 # Function to clean up
