@@ -4,7 +4,6 @@ import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
 import multer from 'multer';
 import AdmZip from 'adm-zip';
-import { WebSocketServer } from 'ws';
 import { createServer } from 'http';
 import Joi from 'joi';
 import winston from 'winston';
@@ -24,6 +23,8 @@ import StreamingScanner from './services/scanner.js';
 import scanQueue from './services/scanQueue.js';
 import migrations from './services/migrations.js';
 import AIAnalysisFormatter from '../core/ai-analysis.js';
+import WebSocketService from './services/websocket.js';
+import semanticSearchService from './services/semanticSearch.js';
 
 // Logger setup
 const logger = winston.createLogger({
@@ -44,7 +45,9 @@ const logger = winston.createLogger({
 
 const app = express();
 const server = createServer(app);
-const wss = new WebSocketServer({ server });
+
+// Initialize WebSocket service
+const wsService = new WebSocketService(server);
 
 // Middleware
 app.use(helmet({
@@ -112,47 +115,22 @@ const scanRequestSchema = Joi.object({
   }).optional()
 });
 
-// WebSocket connection handling
-wss.on('connection', (ws, req) => {
-  logger.info('WebSocket client connected');
-  
-  ws.on('message', async (data) => {
-    try {
-      const message = JSON.parse(data.toString());
-      
-      switch (message.type) {
-        case 'ping':
-          ws.send(JSON.stringify({ type: 'pong', timestamp: Date.now() }));
-          break;
-        case 'subscribe':
-          ws.subscriptions = message.channels || [];
-          ws.send(JSON.stringify({ type: 'subscribed', channels: ws.subscriptions }));
-          break;
-        default:
-          ws.send(JSON.stringify({ type: 'error', message: 'Unknown message type' }));
-      }
-    } catch (error) {
-      logger.error('WebSocket message error', error);
-      ws.send(JSON.stringify({ type: 'error', message: 'Invalid message format' }));
-    }
-  });
-  
-  ws.on('close', () => {
-    logger.info('WebSocket client disconnected');
-  });
-  
-  ws.send(JSON.stringify({ type: 'connected', timestamp: Date.now(), server: 'manito-v1' }));
+// WebSocket service event handlers
+wsService.on('clientConnected', (clientInfo) => {
+  logger.info('WebSocket client connected', { clientId: clientInfo.id });
 });
 
-// Broadcast to WebSocket clients
+wsService.on('clientDisconnected', (clientInfo) => {
+  logger.info('WebSocket client disconnected', { clientId: clientInfo.id });
+});
+
+wsService.on('serverError', (error) => {
+  logger.error('WebSocket server error', { error: error.message });
+});
+
+// Broadcast to WebSocket clients using the service
 function broadcast(channel, data) {
-  const message = JSON.stringify({ channel, data, timestamp: Date.now() });
-  wss.clients.forEach(client => {
-    if (client.readyState === client.OPEN && 
-        (!client.subscriptions || client.subscriptions.includes(channel))) {
-      client.send(message);
-    }
-  });
+  return wsService.broadcast(channel, data);
 }
 
 // Set up scan queue event listeners for WebSocket broadcasting
@@ -223,13 +201,14 @@ app.get('/api/health', async (req, res) => {
       };
 
       health.services = {
-        websocket: {
-          status: wss ? 'ok' : 'error',
-          connections: wss ? wss.clients.size : 0
-        },
+        websocket: wsService.getHealth(),
         scanQueue: {
           status: scanQueue ? 'ok' : 'error',
           ...scanQueue?.getQueueStatus() || {}
+        },
+        semanticSearch: {
+          status: 'ok',
+          features: ['full-text-search', 'global-search', 'advanced-filters', 'search-analytics']
         }
       };
 
@@ -877,9 +856,7 @@ app.get('/api/metrics', (req, res) => {
       memory: process.memoryUsage(),
       cpu: process.cpuUsage()
     },
-    websocket: {
-      connections: wss.clients.size
-    },
+    websocket: wsService.getHealth(),
     scanQueue: queueStatus
   };
   res.json(metrics);
@@ -941,6 +918,146 @@ app.post('/api/ai/settings', async (req, res) => {
     res.status(500).json({ 
       success: false, 
       error: 'Failed to update AI settings', 
+      message: error.message 
+    });
+  }
+});
+
+// Semantic Search API endpoints
+app.get('/api/search', async (req, res) => {
+  try {
+    const { q: query, type, userId, limit = 20, offset = 0 } = req.query;
+    
+    if (!query) {
+      return res.status(400).json({ error: 'Search query is required' });
+    }
+    
+    let results;
+    const userIdParam = req.user?.id || userId;
+    
+    switch (type) {
+      case 'projects':
+        results = await semanticSearchService.searchProjects(query, userIdParam, parseInt(limit), parseInt(offset));
+        break;
+      case 'scans':
+        results = await semanticSearchService.searchScanResults(query, null, parseInt(limit), parseInt(offset));
+        break;
+      case 'files':
+        results = await semanticSearchService.searchFiles(query, null, parseInt(limit), parseInt(offset));
+        break;
+      case 'dependencies':
+        results = await semanticSearchService.searchDependencies(query, null, parseInt(limit), parseInt(offset));
+        break;
+      case 'conflicts':
+        results = await semanticSearchService.searchConflicts(query, null, parseInt(limit), parseInt(offset));
+        break;
+      default:
+        results = await semanticSearchService.globalSearch(query, userIdParam, parseInt(limit));
+    }
+    
+    // Log search query
+    await semanticSearchService.logSearch(query, userIdParam, type, results.total);
+    
+    res.json({
+      success: true,
+      data: results
+    });
+    
+  } catch (error) {
+    logger.error('Search failed', { error: error.message, query: req.query.q });
+    res.status(500).json({ 
+      success: false, 
+      error: 'Search failed', 
+      message: error.message 
+    });
+  }
+});
+
+// Advanced search endpoint
+app.post('/api/search/advanced', async (req, res) => {
+  try {
+    const { query, entityTypes, projectId, dateRange, severity, limit = 50, offset = 0 } = req.body;
+    
+    if (!query) {
+      return res.status(400).json({ error: 'Search query is required' });
+    }
+    
+    const userId = req.user?.id;
+    
+    const results = await semanticSearchService.advancedSearch({
+      query,
+      userId,
+      entityTypes,
+      projectId,
+      dateRange,
+      severity,
+      limit: parseInt(limit),
+      offset: parseInt(offset)
+    });
+    
+    // Log search query
+    await semanticSearchService.logSearch(query, userId, 'advanced', results.total);
+    
+    res.json({
+      success: true,
+      data: results
+    });
+    
+  } catch (error) {
+    logger.error('Advanced search failed', { error: error.message });
+    res.status(500).json({ 
+      success: false, 
+      error: 'Advanced search failed', 
+      message: error.message 
+    });
+  }
+});
+
+// Search suggestions endpoint
+app.get('/api/search/suggestions', async (req, res) => {
+  try {
+    const { q: query, userId, limit = 10 } = req.query;
+    
+    if (!query) {
+      return res.json({ success: true, data: [] });
+    }
+    
+    const userIdParam = req.user?.id || userId;
+    const suggestions = await semanticSearchService.getSearchSuggestions(query, userIdParam, parseInt(limit));
+    
+    res.json({
+      success: true,
+      data: suggestions
+    });
+    
+  } catch (error) {
+    logger.error('Search suggestions failed', { error: error.message });
+    res.status(500).json({ 
+      success: false, 
+      error: 'Search suggestions failed', 
+      message: error.message 
+    });
+  }
+});
+
+// Search analytics endpoint
+app.get('/api/search/analytics', async (req, res) => {
+  try {
+    const { userId, days = 30 } = req.query;
+    const userIdParam = req.user?.id || userId;
+    
+    const analytics = await semanticSearchService.getSearchAnalytics(userIdParam, parseInt(days));
+    
+    res.json({
+      success: true,
+      data: analytics
+    });
+    
+  } catch (error) {
+    logger.error('Search analytics failed', { error: error.message });
+    res.status(500).json({ 
+      success: false, 
+      error: 'Search analytics failed', 
       message: error.message 
     });
   }
@@ -1447,4 +1564,4 @@ process.on('SIGINT', () => {
   });
 });
 
-export { app, server, wss, broadcast };
+export { app, server, wsService, broadcast };

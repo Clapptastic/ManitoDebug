@@ -48,7 +48,7 @@ function AppContent() {
   const feedback = useUserFeedback()
 
   // WebSocket connection for real-time updates
-  const { isConnected, lastMessage } = useWebSocket('ws://localhost:3000')
+  const { isConnected, lastMessage } = useWebSocket('ws://localhost:3000/ws')
 
   // Health check query
   const { data: healthData } = useQuery({
