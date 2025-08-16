@@ -1,67 +1,82 @@
 version: '3.8'
 
 services:
-  # Main development application
+  # Development application with dynamic port management
   manito-dev:
     build:
       context: .
       dockerfile: Dockerfile.dev
+    container_name: manito-dev
     ports:
-      - "3000:3000"   # Server port
-      - "5173:5173"   # Vite dev server port
-      - "9229:9229"   # Node.js debugger port
+      # Dynamic port mapping for development
+      - "3000-3010:3000-3010"  # Server port range
+      - "5173-5180:5173-5180"  # Client port range
+      - "9229:9229"            # Debug port
     environment:
       - NODE_ENV=development
-      - PORT=3000
-      - CLIENT_URL=http://localhost:5173
       - DEBUG=manito:*
-      - CHOKIDAR_USEPOLLING=true  # For file watching in Docker
+      - CHOKIDAR_USEPOLLING=true
+      - WATCHPACK_POLLING=true
+      # Database configuration
+      - DATABASE_URL=postgresql://manito:manito@postgres:5432/manito_dev
+      - REDIS_URL=redis://redis:6379
+      # Dynamic port management
+      - ENABLE_DYNAMIC_PORTS=true
+      - PORT_RANGE_START=3000
+      - PORT_RANGE_END=3010
     volumes:
-      # Mount source code for hot reloading
-      - ./server:/app/server:cached
-      - ./client:/app/client:cached
-      - ./core:/app/core:cached
-      - ./cli:/app/cli:cached
-      - ./docs:/app/docs:ro
-      
-      # Mount workspace for scanning projects
-      - ./scan-workspace:/app/scan-workspace:rw
-      
-      # Mount node_modules as volumes for better performance
-      - manito-dev-node-modules:/app/node_modules
-      - manito-dev-server-node-modules:/app/server/node_modules
-      - manito-dev-client-node-modules:/app/client/node_modules
-      - manito-dev-core-node-modules:/app/core/node_modules
-      - manito-dev-cli-node-modules:/app/cli/node_modules
-      
-      # Cache directories
+      - .:/app
+      - /app/node_modules
+      - /app/client/node_modules
+      - /app/server/node_modules
+      - /app/core/node_modules
       - manito-dev-cache:/app/.cache
-      - manito-dev-vite-cache:/app/client/.vite
-    networks:
-      - manito-dev-network
+      - manito-dev-logs:/app/logs
     depends_on:
-      - redis-dev
-      - postgres-dev
+      - postgres
+      - redis
+    networks:
+      - manito-network
+    restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 60s
-    restart: unless-stopped
-    stdin_open: true
-    tty: true
 
-  # Development Redis for caching
-  redis-dev:
+  # PostgreSQL database
+  postgres:
+    image: postgres:15-alpine
+    container_name: manito-postgres
+    environment:
+      - POSTGRES_DB=manito_dev
+      - POSTGRES_USER=manito
+      - POSTGRES_PASSWORD=manito
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+    networks:
+      - manito-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U manito -d manito_dev"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Redis cache
+  redis:
     image: redis:7-alpine
+    container_name: manito-redis
     ports:
       - "6379:6379"
-    command: redis-server --appendonly yes --save 20 1
     volumes:
-      - redis-dev-data:/data
+      - redis-data:/data
     networks:
-      - manito-dev-network
+      - manito-network
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
@@ -69,96 +84,38 @@ services:
       timeout: 10s
       retries: 3
 
-  # Development PostgreSQL
-  postgres-dev:
-    image: postgres:15-alpine
-    environment:
-      POSTGRES_DB: manito_dev
-      POSTGRES_USER: manito_dev
-      POSTGRES_PASSWORD: manito_dev_password
+  # Development monitoring (optional)
+  monitoring:
+    image: prom/prometheus:latest
+    container_name: manito-monitoring
     ports:
-      - "5432:5432"
+      - "9090:9090"
     volumes:
-      - postgres-dev-data:/var/lib/postgresql/data
-      - ./scripts/init-dev.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=200h'
+      - '--web.enable-lifecycle'
     networks:
-      - manito-dev-network
+      - manito-network
     restart: unless-stopped
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U manito_dev -d manito_dev"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-
-  # Development tools container
-  dev-tools:
-    image: node:18-alpine
-    working_dir: /app
-    environment:
-      - NODE_ENV=development
-    volumes:
-      - .:/app:cached
-      - manito-dev-tools-node-modules:/app/node_modules
-    networks:
-      - manito-dev-network
-    command: tail -f /dev/null  # Keep container running
-    profiles:
-      - tools
-
-  # File watcher for tests (optional)
-  test-runner:
-    build:
-      context: .
-      dockerfile: Dockerfile.dev
-    working_dir: /app
-    environment:
-      - NODE_ENV=test
-      - CI=true
-    volumes:
-      - ./server:/app/server:cached
-      - ./client:/app/client:cached
-      - ./core:/app/core:cached
-      - ./cli:/app/cli:cached
-      - manito-test-node-modules:/app/node_modules
-      - ./coverage:/app/coverage:rw
-    command: npm run test:watch
-    networks:
-      - manito-dev-network
-    profiles:
-      - testing
-    stdin_open: true
-    tty: true
 
 volumes:
-  # Development node_modules volumes for better performance
-  manito-dev-node-modules:
+  postgres-data:
     driver: local
-  manito-dev-server-node-modules:
+  redis-data:
     driver: local
-  manito-dev-client-node-modules:
-    driver: local
-  manito-dev-core-node-modules:
-    driver: local
-  manito-dev-cli-node-modules:
-    driver: local
-  manito-dev-tools-node-modules:
-    driver: local
-  manito-test-node-modules:
-    driver: local
-  
-  # Cache volumes
   manito-dev-cache:
     driver: local
-  manito-dev-vite-cache:
+  manito-dev-logs:
     driver: local
-    
-  # Data volumes
-  redis-dev-data:
-    driver: local
-  postgres-dev-data:
+  prometheus-data:
     driver: local
 
 networks:
-  manito-dev-network:
+  manito-network:
     driver: bridge
-    name: manito-dev-network

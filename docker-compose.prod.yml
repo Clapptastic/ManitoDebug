@@ -1,136 +1,50 @@
 version: '3.8'
 
 services:
-  manito-app:
+  # Production application with dynamic port management
+  manito-prod:
     build:
       context: .
       dockerfile: Dockerfile.prod
+    container_name: manito-prod
     ports:
-      - "3000:3000"
+      # Dynamic port mapping for production
+      - "3000-3010:3000-3010"  # Server port range
+      - "80:80"                # HTTP port
+      - "443:443"              # HTTPS port
     environment:
       - NODE_ENV=production
       - PORT=3000
-      - CLIENT_URL=${CLIENT_URL:-https://manito.yourdomain.com}
-      - DATABASE_URL=${DATABASE_URL:-postgresql://manito_user:manito_password@postgres:5432/manito}
-      - REDIS_URL=${REDIS_URL:-redis://redis:6379}
+      # Database configuration
+      - DATABASE_URL=postgresql://manito:${POSTGRES_PASSWORD}@postgres:5432/manito_prod
+      - REDIS_URL=redis://redis:6379
+      # Dynamic port management
+      - ENABLE_DYNAMIC_PORTS=true
+      - PORT_RANGE_START=3000
+      - PORT_RANGE_END=3010
+      # Security
       - JWT_SECRET=${JWT_SECRET}
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
       - SESSION_SECRET=${SESSION_SECRET}
-      - RATE_LIMIT_WINDOW_MS=${RATE_LIMIT_WINDOW_MS:-900000}
-      - RATE_LIMIT_MAX_REQUESTS=${RATE_LIMIT_MAX_REQUESTS:-100}
-      - MAX_SCAN_SIZE_MB=${MAX_SCAN_SIZE_MB:-500}
-      - MAX_CONCURRENT_SCANS=${MAX_CONCURRENT_SCANS:-3}
-      - WORKER_THREADS_MAX=${WORKER_THREADS_MAX:-4}
-      - LOG_LEVEL=${LOG_LEVEL:-info}
     volumes:
-      - ./scan-workspace:/app/scan-workspace:ro
-      - manito-logs:/app/logs
+      - manito-prod-logs:/app/logs
+      - manito-prod-data:/app/data
     depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
+      - postgres
+      - redis
+    networks:
+      - manito-network
+    restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 40s
-    restart: unless-stopped
-    networks:
-      - manito-network
-    deploy:
-      resources:
-        limits:
-          memory: 2G
-          cpus: '1.5'
-        reservations:
-          memory: 1G
-          cpus: '0.5'
-
-  postgres:
-    image: postgres:15-alpine
-    environment:
-      POSTGRES_DB: manito
-      POSTGRES_USER: manito_user
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-manito_password}
-      POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --lc-collate=C --lc-ctype=C"
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres-data:/var/lib/postgresql/data
-      - ./scripts/init-dev.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
-      - ./scripts/prod-optimizations.sql:/docker-entrypoint-initdb.d/02-optimizations.sql:ro
-    command: >
-      postgres 
-      -c shared_preload_libraries=pg_stat_statements
-      -c pg_stat_statements.track=all
-      -c max_connections=200
-      -c shared_buffers=256MB
-      -c effective_cache_size=1GB
-      -c maintenance_work_mem=64MB
-      -c checkpoint_completion_target=0.9
-      -c wal_buffers=16MB
-      -c default_statistics_target=100
-      -c random_page_cost=1.1
-      -c effective_io_concurrency=200
-      -c work_mem=4MB
-      -c min_wal_size=1GB
-      -c max_wal_size=4GB
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U manito_user -d manito"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
       start_period: 30s
-    restart: unless-stopped
-    networks:
-      - manito-network
-    deploy:
-      resources:
-        limits:
-          memory: 1G
-          cpus: '1.0'
-        reservations:
-          memory: 512M
-          cpus: '0.25'
 
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "6379:6379"
-    command: >
-      redis-server 
-      --appendonly yes
-      --maxmemory 256mb
-      --maxmemory-policy allkeys-lru
-      --tcp-keepalive 300
-      --timeout 300
-      --save 900 1 300 10 60 10000
-    volumes:
-      - redis-data:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 30s
-      timeout: 3s
-      retries: 5
-      start_period: 10s
-    restart: unless-stopped
-    networks:
-      - manito-network
-    deploy:
-      resources:
-        limits:
-          memory: 512M
-          cpus: '0.5'
-        reservations:
-          memory: 128M
-          cpus: '0.1'
-
-  # Nginx reverse proxy for production
+  # Nginx reverse proxy with dynamic port support
   nginx:
     image: nginx:alpine
+    container_name: manito-nginx
     ports:
       - "80:80"
       - "443:443"
@@ -139,55 +53,88 @@ services:
       - ./nginx/ssl:/etc/nginx/ssl:ro
       - nginx-logs:/var/log/nginx
     depends_on:
-      - manito-app
+      - manito-prod
+    networks:
+      - manito-network
+    restart: unless-stopped
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost/health"]
+      test: ["CMD", "nginx", "-t"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 10s
-    restart: unless-stopped
+
+  # PostgreSQL database
+  postgres:
+    image: postgres:15-alpine
+    container_name: manito-postgres-prod
+    environment:
+      - POSTGRES_DB=manito_prod
+      - POSTGRES_USER=manito
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
     networks:
       - manito-network
-    deploy:
-      resources:
-        limits:
-          memory: 256M
-          cpus: '0.5'
-        reservations:
-          memory: 64M
-          cpus: '0.1'
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U manito -d manito_prod"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
-  # Prometheus monitoring (optional)
+  # Redis cache
+  redis:
+    image: redis:7-alpine
+    container_name: manito-redis-prod
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - manito-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Production monitoring
   prometheus:
     image: prom/prometheus:latest
+    container_name: manito-prometheus
     ports:
       - "9090:9090"
     volumes:
-      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
       - prometheus-data:/prometheus
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
       - '--storage.tsdb.path=/prometheus'
       - '--web.console.libraries=/etc/prometheus/console_libraries'
       - '--web.console.templates=/etc/prometheus/consoles'
-      - '--storage.tsdb.retention.time=30d'
+      - '--storage.tsdb.retention.time=200h'
       - '--web.enable-lifecycle'
     networks:
       - manito-network
     restart: unless-stopped
 
-  # Grafana dashboard (optional)
+  # Grafana for monitoring visualization
   grafana:
     image: grafana/grafana:latest
+    container_name: manito-grafana
     ports:
       - "3001:3000"
     environment:
-      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin123}
-      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
     volumes:
       - grafana-data:/var/lib/grafana
-      - ./monitoring/grafana-datasources.yml:/etc/grafana/provisioning/datasources/datasources.yml:ro
+      - ./monitoring/grafana-datasources.yml:/etc/grafana/provisioning/datasources/datasources.yml
+    depends_on:
+      - prometheus
     networks:
       - manito-network
     restart: unless-stopped
@@ -197,13 +144,15 @@ volumes:
     driver: local
   redis-data:
     driver: local
-  manito-logs:
+  manito-prod-logs:
     driver: local
-  nginx-logs:
+  manito-prod-data:
     driver: local
   prometheus-data:
     driver: local
   grafana-data:
+    driver: local
+  nginx-logs:
     driver: local
 
 networks:

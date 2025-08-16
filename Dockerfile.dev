@@ -60,14 +60,14 @@ ENV DEBUG=manito:*
 ENV CHOKIDAR_USEPOLLING=true
 ENV WATCHPACK_POLLING=true
 
-# Expose ports for development
-EXPOSE 3000 5173 9229
+# Expose dynamic ports for development (will be mapped at runtime)
+EXPOSE 3000-3010 5173-5180 9229
 
 # Health check for development with extended timeout
 HEALTHCHECK --interval=30s --timeout=15s --start-period=60s --retries=5 \
     CMD curl -f http://localhost:3000/api/health || exit 1
 
-# Create startup script for development
+# Create startup script for development with dynamic port support
 RUN echo '#!/bin/bash\n\
 set -e\n\
 \n\
@@ -78,10 +78,11 @@ npm install --legacy-peer-deps\n\
 echo "🔧 Running development setup..."\n\
 npm run postinstall\n\
 \n\
-echo "🌟 Starting development servers..."\n\
-echo "   • Server: http://localhost:3000"\n\
-echo "   • Client: http://localhost:5173"\n\
+echo "🌟 Starting development servers with dynamic port management..."\n\
+echo "   • Server: Dynamic port assignment (typically 3000)"\n\
+echo "   • Client: Dynamic port assignment (typically 5173)"\n\
 echo "   • Debugger: http://localhost:9229"\n\
+echo "   • Port conflicts will be automatically resolved"\n\
 echo ""\n\
 exec npm run dev\n\
 ' > /app/start-dev.sh && chmod +x /app/start-dev.sh

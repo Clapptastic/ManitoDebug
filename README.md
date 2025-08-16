@@ -1,315 +1,269 @@
-# ManitoDebug 🔍
+# ManitoDebug - AI-Powered Code Analysis & Debugging Tool
 
-> AI-powered code analysis and debugging platform for modern development teams
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Node.js](https://img.shields.io/badge/Node.js-20.x-green.svg)](https://nodejs.org/)
+[![Docker](https://img.shields.io/badge/Docker-Ready-blue.svg)](https://docker.com/)
 
-ManitoDebug is a comprehensive code analysis platform that combines AST parsing, dependency graph visualization, AI-powered insights, and real-time collaboration features to help developers understand, debug, and optimize their codebases.
+**ManitoDebug** is a comprehensive AI-powered code analysis and debugging tool that helps developers identify dependencies, conflicts, and potential issues in their codebases. Built with modern web technologies and featuring dynamic port management for seamless deployment.
 
-## ✨ Features
+## 🚀 Features
 
-- 🧠 **AI-Powered Analysis** - Get intelligent suggestions and code insights
-- 📊 **Dependency Visualization** - Interactive dependency graphs and metrics
-- ⚡ **Real-time Collaboration** - WebSocket-powered live updates
-- 🔍 **Code Scanner** - Deep AST analysis with conflict detection
-- 📱 **Modern UI/UX** - Responsive design with dark theme
-- 🐳 **Docker Support** - Production-ready containerization
-- 🔧 **VS Code Extension** - Integrated development experience
-- 🖥️ **CLI Tools** - Automation and CI/CD integration
-- 🧪 **Comprehensive Testing** - Jest-based testing framework
-- 🎮 **Interactive Development** - Smart CLI for easy setup and deployment
+### Core Functionality
+- **🔍 Intelligent Code Scanning**: AST-based analysis with dependency extraction
+- **🤖 AI-Powered Analysis**: OpenAI, Anthropic, and local AI providers
+- **📊 Real-time Metrics**: Performance monitoring and code quality insights
+- **🔗 Dependency Mapping**: Visual dependency graphs and conflict detection
+- **🌐 Dynamic Port Management**: Automatic port conflict resolution
+- **📱 Modern Web UI**: React-based interface with real-time updates
 
-## 🚀 Quick Start
-
-Get ManitoDebug running in seconds with a single command:
-
-```bash
-# Clone the repository
-git clone <your-repo-url> manito-debug
-cd manito-debug
-
-# Run comprehensive setup (one-time)
-npm run setup
-
-# Launch full stack with 100% functionality
-npm run dev
-```
-
-**Single Command Launch**: `npm run dev` starts the complete full stack:
-- ✅ **Backend Server** (Port 3000)
-- ✅ **Frontend Client** (Port 5173) 
-- ✅ **Database Layer** (PostgreSQL with mock fallback)
-- ✅ **WebSocket Service** (Real-time communication)
-- ✅ **Search Engine** (Semantic search)
-- ✅ **Scanner Engine** (All scanning methods)
-- ✅ **AI Integration** (OpenAI, Anthropic, Google)
-- ✅ **Security Layer** (Authentication, rate limiting)
-
-**Verify Functionality**: `npm run test:e2e` runs comprehensive tests
-
-For detailed instructions, see [FULL_STACK_LAUNCH_GUIDE.md](docs/FULL_STACK_LAUNCH_GUIDE.md).
+### Advanced Features
+- **🔄 Real-time Progress**: WebSocket-based live scanning updates
+- **📈 Semantic Search**: PostgreSQL-powered full-text search
+- **🎯 Conflict Detection**: Circular dependencies and unused imports
+- **📋 Queue Management**: Asynchronous job processing
+- **🔧 Migration System**: Database schema management
+- **📊 Monitoring**: Prometheus and Grafana integration
 
 ## 🏗️ Architecture
 
 ```
-manito-package/
-├── server/          # Express.js API server with WebSocket
-├── client/          # React 18 frontend application
-├── core/            # Code scanning engine with AST parsing
-├── cli/             # Command-line interface tools
-├── vscode-extension/# VS Code extension
-├── docs/            # Documentation and mockups
-├── docker-compose.yml
-├── Dockerfile
-└── jest.config.js   # Testing configuration
+┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│   React Client  │    │  Express Server │    │   PostgreSQL    │
+│   (Dynamic Port)│◄──►│  (Dynamic Port) │◄──►│   Database      │
+└─────────────────┘    └─────────────────┘    └─────────────────┘
+         │                       │                       │
+         │              ┌─────────────────┐              │
+         └──────────────►│   Redis Cache   │◄─────────────┘
+                        └─────────────────┘
 ```
 
 ## 🚀 Quick Start
 
 ### Prerequisites
-- Node.js 18+
-- npm 9+
+- Node.js 20.x or higher
+- PostgreSQL 15.x
+- Redis 7.x
 - Docker (optional)
 
-### Installation
+### Local Development
 
+1. **Clone the repository**
+   ```bash
+   git clone https://github.com/Clapptastic/ManitoDebug.git
+   cd ManitoDebug
+   ```
+
+2. **Install dependencies**
+   ```bash
+   npm install
+   ```
+
+3. **Start the full stack** (with dynamic port management)
+   ```bash
+   npm run dev
+   ```
+
+   The system will automatically:
+   - Detect available ports
+   - Resolve any port conflicts
+   - Start server and client on optimal ports
+   - Display the URLs for access
+
+4. **Access the application**
+   - **Client**: http://localhost:5173 (or dynamically assigned port)
+   - **Server API**: http://localhost:3000 (or dynamically assigned port)
+   - **Health Check**: http://localhost:3000/api/health
+
+### Docker Deployment
+
+#### Development Environment
 ```bash
-# Clone the repository
-git clone https://github.com/[username]/ManitoDebug.git
-cd ManitoDebug
+# Start development environment with dynamic ports
+docker-compose -f docker-compose.dev.yml up --build
 
-# Install dependencies
-npm install --legacy-peer-deps
-
-# Start development servers
-npm run dev
+# Access services
+# Client: http://localhost:5173 (or assigned port)
+# Server: http://localhost:3000 (or assigned port)
+# Database: localhost:5432
+# Redis: localhost:6379
 ```
 
-### Using Docker
-
+#### Production Environment
 ```bash
-# Build and start with Docker Compose
-docker-compose up --build
+# Create environment file
+cp .env.example .env
+# Edit .env with your configuration
 
-# Or build production image
-docker build -t manitodebug .
-docker run -p 3000:3000 -p 5173:5173 manitodebug
+# Start production environment
+docker-compose -f docker-compose.prod.yml up --build -d
+
+# Access services
+# Application: http://localhost (via Nginx)
+# Grafana: http://localhost:3001
+# Prometheus: http://localhost:9090
 ```
 
-## 📋 Available Scripts
+## 🔧 Dynamic Port Management
 
-### Development
-- `npm run dev` - Start development servers (client + server)
-- `npm run build` - Build for production
-- `npm start` - Start production server
+ManitoDebug features a sophisticated dynamic port management system that automatically:
 
-### Testing
-- `npm test` - Run all tests
-- `npm run test:watch` - Run tests in watch mode
-- `npm run test:coverage` - Generate coverage reports
-- `npm run test:server` - Test server only
-- `npm run test:client` - Test client only
+- **Detects Port Conflicts**: Identifies when ports are in use
+- **Resolves Conflicts**: Automatically assigns alternative ports
+- **Provides Fallbacks**: Multiple fallback mechanisms for reliability
+- **Maintains Consistency**: Ensures all components use the same configuration
 
-### Quality & Linting
-- `npm run lint` - Check code style
-- `npm run lint:fix` - Fix linting issues
-- `npm run format` - Format code with Prettier
-- `npm run typecheck` - Run TypeScript checks
+### Port Configuration
+- **Server**: Dynamic assignment (typically 3000-3010 range)
+- **Client**: Dynamic assignment (typically 5173-5180 range)
+- **WebSocket**: Dynamic assignment (typically 3001-3010 range)
+- **Database**: Standard PostgreSQL port (5432)
+- **Redis**: Standard Redis port (6379)
 
-### CLI Commands
+### Environment Variables
 ```bash
-# Scan a project
-npx manito scan ./src
+# Enable dynamic port management
+ENABLE_DYNAMIC_PORTS=true
+PORT_RANGE_START=3000
+PORT_RANGE_END=3010
 
-# Detect codebase "vibe"
-npx manito vibe ./src
-
-# Start development server
-npx manito serve
-
-# Export analysis results
-npx manito export ./src --format json --output results.json
+# Database configuration
+DATABASE_URL=postgresql://user:password@localhost:5432/manito_dev
+REDIS_URL=redis://localhost:6379
 ```
+
+## 📚 API Documentation
+
+### Core Endpoints
+- `GET /api/health` - Health check
+- `GET /api/ports` - Dynamic port configuration
+- `POST /api/scan` - Code scanning
+- `POST /api/ai/analyze` - AI analysis
+- `GET /api/search` - Semantic search
+- `GET /api/metrics` - Performance metrics
+
+### WebSocket Events
+- `scan_progress` - Real-time scanning updates
+- `analysis_complete` - AI analysis results
+- `error` - Error notifications
+
+## 🧪 Testing
+
+### Run All Tests
+```bash
+npm test
+```
+
+### Dynamic Port Management Tests
+```bash
+node scripts/test-dynamic-port-management.js
+```
+
+### Client-Server Integration Tests
+```bash
+node scripts/test-client-server-integration.js
+```
+
+### AI Analysis Tests
+```bash
+node scripts/test-ai-analysis.js
+```
+
+## 📊 Monitoring
+
+### Development Monitoring
+- **Health Checks**: Automatic health monitoring
+- **Logs**: Structured logging with timestamps
+- **Metrics**: Performance metrics collection
+
+### Production Monitoring
+- **Prometheus**: Metrics collection and storage
+- **Grafana**: Visualization and dashboards
+- **Nginx**: Reverse proxy with SSL support
 
 ## 🔧 Configuration
 
 ### Environment Variables
-Create a `.env` file in the root directory:
-
-```env
-# Server configuration
-PORT=3000
-CLIENT_URL=http://localhost:5173
+```bash
+# Core Configuration
 NODE_ENV=development
+PORT=3000
+DEBUG=manito:*
 
-# AI provider settings (optional)
-# OpenAI Configuration
-OPENAI_API_KEY=your-openai-api-key-here
-OPENAI_MODEL=gpt-3.5-turbo
+# Database
+DATABASE_URL=postgresql://user:password@localhost:5432/manito_dev
+REDIS_URL=redis://localhost:6379
 
-# Anthropic Configuration  
-ANTHROPIC_API_KEY=your-anthropic-api-key-here
-ANTHROPIC_MODEL=claude-3-haiku-20240307
+# AI Providers
+OPENAI_API_KEY=your_openai_key
+ANTHROPIC_API_KEY=your_anthropic_key
+
+# Security
+JWT_SECRET=your_jwt_secret
+SESSION_SECRET=your_session_secret
 ```
 
-### VS Code Extension
+### Configuration Files
+- `server/config/ports.js` - Port management configuration
+- `client/vite.config.js` - Client build configuration
+- `nginx/nginx.conf` - Reverse proxy configuration
+- `monitoring/prometheus.yml` - Metrics configuration
 
-**🚀 Auto-Installation:** When you open the ManitoDebug project in VS Code, it will automatically prompt to install the extension!
+## 🚀 Deployment
 
-**Manual Installation:**
-```bash
-# Install extension from command line
-npm run install-extension
+### Production Checklist
+- [ ] Set environment variables
+- [ ] Configure SSL certificates
+- [ ] Set up database migrations
+- [ ] Configure monitoring
+- [ ] Set up backup strategy
+- [ ] Configure logging
+- [ ] Set up CI/CD pipeline
 
-# Or package and install manually
-npm run package-extension
-code --install-extension vscode-extension/manito-vscode-1.0.0.vsix
-```
-
-**Usage:**
-- Use Command Palette (`Cmd+Shift+P`):
-  - `Manito: Scan Workspace`
-  - `Manito: Show Dependency Graph`
-  - `Manito: Open Dashboard`
-  - `Manito: Install Extension`
-- Status bar shows: "$(graph) Manito" with real-time updates
-
-## 📊 Features Deep Dive
-
-### Code Scanner Engine
-- **AST Parsing** - Uses Acorn parser for JavaScript/TypeScript analysis
-- **Dependency Tracking** - Maps import/export relationships
-- **Circular Dependencies** - Detects and reports dependency cycles
-- **Complexity Analysis** - Calculates cognitive complexity metrics
-- **Conflict Detection** - Identifies potential code issues
-
-### AI Integration
-- **Code Analysis** - AI-powered code quality assessment
-- **Suggestions** - Intelligent refactoring recommendations
-- **Confidence Scoring** - Reliability metrics for AI suggestions
-- **Multiple Providers** - Support for various AI services
-
-### Real-time Features
-- **Live Updates** - WebSocket-powered real-time scan results
-- **Collaborative Analysis** - Multiple users can analyze simultaneously
-- **Progress Tracking** - Real-time scan progress indicators
-
-## 🧪 Testing
-
-The project includes comprehensive test suites:
-
-```bash
-# Run specific test suites
-npm run test:server    # API endpoints and WebSocket tests
-npm run test:client    # React component tests
-npm run test:core      # Scanner engine tests
-npm run test:cli       # Command-line interface tests
-
-# Generate coverage reports
-npm run test:coverage
-```
-
-Testing stack:
-- **Jest** - Test framework
-- **Testing Library** - React component testing
-- **Supertest** - API endpoint testing
-- **JSDOM** - DOM environment for React tests
-
-## 🐳 Docker Deployment
-
-### Development
-```bash
-docker-compose up
-```
-
-### Production
+### Docker Deployment
 ```bash
 # Build production image
-docker build -t manitodebug:latest .
+docker build -f Dockerfile.prod -t manito-prod .
 
-# Run with environment variables
-docker run -p 3000:3000 \
-  -e NODE_ENV=production \
-  -e PORT=3000 \
-  manitodebug:latest
-```
-
-### Multi-stage Build
-The Dockerfile includes optimized multi-stage build:
-- **Base stage** - Common dependencies
-- **Dependencies stage** - Install all deps
-- **Builder stage** - Build applications
-- **Runner stage** - Production runtime
-
-## 🔌 API Reference
-
-### Health Check
-```http
-GET /api/health
-```
-
-### Code Scanning
-```http
-POST /api/scan
-Content-Type: application/json
-
-{
-  "path": "./src",
-  "options": {
-    "patterns": ["**/*.{js,jsx,ts,tsx}"],
-    "excludePatterns": ["node_modules/**"]
-  }
-}
-```
-
-### AI Analysis
-```http
-POST /api/ai/send
-Content-Type: application/json
-
-{
-  "message": "Analyze this code",
-  "provider": "local"
-}
-```
-
-### Dependency Graph
-```http
-GET /api/graph/:scanId?
+# Run with dynamic ports
+docker run -p 3000-3010:3000-3010 -p 80:80 -p 443:443 manito-prod
 ```
 
 ## 🤝 Contributing
 
 1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+2. Create a feature branch
+3. Make your changes
+4. Add tests for new functionality
+5. Ensure all tests pass
+6. Submit a pull request
 
 ### Development Guidelines
-- Follow existing code style (use `npm run lint`)
-- Add tests for new features
-- Update documentation as needed
-- Ensure Docker builds work
-- Test VS Code extension functionality
+- Follow the existing code style
+- Add comprehensive tests
+- Update documentation
+- Use dynamic port management
+- Follow security best practices
 
-## 📝 License
+## 📄 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## 🙏 Acknowledgments
+## 🆘 Support
 
-- Built with modern web technologies (React 18, Express.js, Node.js)
-- AST parsing powered by Acorn
-- UI components inspired by modern design systems
-- Docker containerization for easy deployment
-- VS Code extension API for developer integration
+- **Documentation**: [docs/](docs/)
+- **Issues**: [GitHub Issues](https://github.com/Clapptastic/ManitoDebug/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/Clapptastic/ManitoDebug/discussions)
 
-## 📞 Support
+## 🗺️ Roadmap
 
-For questions, issues, or contributions:
-- 🐛 [Report bugs](https://github.com/[username]/ManitoDebug/issues)
-- 💡 [Request features](https://github.com/[username]/ManitoDebug/issues)
-- 📖 [Read documentation](https://github.com/[username]/ManitoDebug/wiki)
+- [ ] Enhanced AI analysis capabilities
+- [ ] Multi-language support
+- [ ] Advanced dependency visualization
+- [ ] Performance optimization
+- [ ] Cloud deployment guides
+- [ ] Plugin system
+- [ ] Team collaboration features
 
 ---
 
-**ManitoDebug** - Empowering developers with AI-powered code analysis 🚀
+**Built with ❤️ by the ManitoDebug Team**
