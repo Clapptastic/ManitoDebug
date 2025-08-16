@@ -7,6 +7,9 @@ class AIService {
   }
 
   initializeProviders() {
+    // Clear existing providers
+    this.providers.clear();
+    
     // OpenAI Provider
     if (process.env.OPENAI_API_KEY) {
       const openai = new OpenAI({

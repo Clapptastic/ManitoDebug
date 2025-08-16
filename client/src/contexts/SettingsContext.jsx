@@ -74,18 +74,125 @@ export const SettingsProvider = ({ children }) => {
 
   const [hasChanges, setHasChanges] = useState(false)
 
+  // Validate and sanitize settings
+  const validateSettings = (settings) => {
+    const defaultSettings = {
+      theme: 'dark',
+      language: 'en',
+      autoSave: true,
+      confirmActions: true,
+      fontSize: 'medium',
+      sidebarPosition: 'left',
+      compactMode: false,
+      showLineNumbers: true,
+      colorScheme: 'default',
+      enableNotifications: true,
+      soundEnabled: true,
+      scanCompleteNotify: true,
+      errorNotifications: true,
+      updateNotifications: true,
+      maxFileSize: 1024 * 1024,
+      scanTimeout: 30000,
+      deepAnalysis: true,
+      trackDependencies: true,
+      detectCircular: true,
+      complexityThreshold: 10,
+      enableCache: true,
+      maxCacheSize: 100 * 1024 * 1024,
+      preloadResults: true,
+      backgroundScanning: false,
+      allowRemoteScanning: false,
+      encryptLocalData: true,
+      shareAnalytics: false,
+      aiProvider: 'local',
+      aiApiKeys: {
+        openai: '',
+        anthropic: '',
+        google: '',
+        custom: ''
+      },
+      enableAIInsights: true,
+      aiResponseLength: 'medium',
+      aiModelPreferences: {
+        openai: 'gpt-3.5-turbo',
+        anthropic: 'claude-3-haiku-20240307',
+        google: 'gemini-pro'
+      }
+    };
+
+    // Merge with defaults to ensure all required fields exist
+    return { ...defaultSettings, ...settings };
+  };
+
   // Load settings from localStorage on mount
   useEffect(() => {
     try {
-      const savedSettings = localStorage.getItem('manito-settings')
+      let savedSettings = localStorage.getItem('manito-settings')
+      
+      // If main settings are corrupted, try backup
+      if (!savedSettings) {
+        const backupSettings = localStorage.getItem('manito-settings-backup')
+        if (backupSettings) {
+          savedSettings = backupSettings
+          console.log('Using settings backup');
+        }
+      }
+      
       if (savedSettings) {
         const parsed = JSON.parse(savedSettings)
-        setSettings(prev => ({ ...prev, ...parsed }))
+        const validatedSettings = validateSettings(parsed)
+        setSettings(validatedSettings)
       }
     } catch (error) {
       console.warn('Failed to load settings:', error)
+      
+      // Try to restore from backup if main settings are corrupted
+      try {
+        const backupSettings = localStorage.getItem('manito-settings-backup')
+        if (backupSettings) {
+          const parsed = JSON.parse(backupSettings)
+          const validatedSettings = validateSettings(parsed)
+          setSettings(validatedSettings)
+          console.log('Settings restored from backup due to corruption');
+        }
+      } catch (backupError) {
+        console.error('Failed to restore from backup:', backupError)
+      }
     }
   }, [])
+
+  // Send AI settings to backend when they're loaded from localStorage
+  useEffect(() => {
+    const sendAISettingsToBackend = async () => {
+      if (settings.aiApiKeys && (settings.aiApiKeys.openai || settings.aiApiKeys.anthropic || settings.aiApiKeys.google)) {
+        try {
+          const response = await fetch('/api/ai/settings', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              aiApiKeys: settings.aiApiKeys,
+              aiProvider: settings.aiProvider
+            })
+          });
+          
+          if (response.ok) {
+            console.log('AI settings restored on backend');
+          } else {
+            console.warn('Failed to restore AI settings on backend');
+          }
+        } catch (error) {
+          console.warn('Could not restore AI settings on backend:', error);
+        }
+      }
+    };
+
+    // Only send if we have AI settings and the app has loaded
+    if (settings.aiApiKeys && Object.values(settings.aiApiKeys).some(key => key)) {
+      sendAISettingsToBackend();
+    }
+  }, [settings.aiApiKeys, settings.aiProvider]);
 
   // Apply theme changes
   useEffect(() => {
@@ -110,17 +217,58 @@ export const SettingsProvider = ({ children }) => {
   const updateSetting = (key, value) => {
     setSettings(prev => ({ ...prev, [key]: value }))
     setHasChanges(true)
+    
+    // Auto-save if enabled
+    if (settings.autoSave) {
+      setTimeout(() => saveSettings(), 1000); // Debounce auto-save
+    }
   }
 
   const updateSettings = (newSettings) => {
     setSettings(prev => ({ ...prev, ...newSettings }))
     setHasChanges(true)
+    
+    // Auto-save if enabled
+    if (settings.autoSave) {
+      setTimeout(() => saveSettings(), 1000); // Debounce auto-save
+    }
   }
 
-  const saveSettings = () => {
+  const saveSettings = async () => {
     try {
+      // Create a backup before saving
+      const currentSettings = localStorage.getItem('manito-settings')
+      if (currentSettings) {
+        localStorage.setItem('manito-settings-backup', currentSettings)
+      }
+      
+      // Save current settings
       localStorage.setItem('manito-settings', JSON.stringify(settings))
       setHasChanges(false)
+      
+      // Send AI settings to backend if they've changed
+      if (settings.aiApiKeys && (settings.aiApiKeys.openai || settings.aiApiKeys.anthropic || settings.aiApiKeys.google)) {
+        try {
+          const response = await fetch('/api/ai/settings', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              aiApiKeys: settings.aiApiKeys,
+              aiProvider: settings.aiProvider
+            })
+          });
+          
+          if (response.ok) {
+            console.log('AI settings updated on backend');
+          } else {
+            console.warn('Failed to update AI settings on backend');
+          }
+        } catch (error) {
+          console.warn('Could not update AI settings on backend:', error);
+        }
+      }
       
       // Show success notification if notifications are enabled
       if (settings.enableNotifications) {
@@ -128,6 +276,18 @@ export const SettingsProvider = ({ children }) => {
       }
     } catch (error) {
       console.error('Failed to save settings:', error)
+      
+      // Try to restore from backup
+      try {
+        const backup = localStorage.getItem('manito-settings-backup')
+        if (backup) {
+          localStorage.setItem('manito-settings', backup)
+          console.log('Settings restored from backup');
+        }
+      } catch (backupError) {
+        console.error('Failed to restore from backup:', backupError)
+      }
+      
       if (settings.errorNotifications) {
         feedback.settingsFailed()
       }
@@ -185,6 +345,55 @@ export const SettingsProvider = ({ children }) => {
     if (settings.enableNotifications) {
       feedback.settingsReset()
     }
+  }
+
+  const exportSettings = () => {
+    try {
+      const dataStr = JSON.stringify(settings, null, 2)
+      const dataBlob = new Blob([dataStr], { type: 'application/json' })
+      const url = URL.createObjectURL(dataBlob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `manito-settings-${new Date().toISOString().split('T')[0]}.json`
+      link.click()
+      URL.revokeObjectURL(url)
+      
+      if (settings.enableNotifications) {
+        feedback.settingsExported()
+      }
+    } catch (error) {
+      console.error('Failed to export settings:', error)
+      if (settings.errorNotifications) {
+        feedback.settingsExportFailed()
+      }
+    }
+  }
+
+  const importSettings = (file) => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = (e) => {
+        try {
+          const imported = JSON.parse(e.target.result)
+          const validatedSettings = validateSettings(imported)
+          setSettings(validatedSettings)
+          setHasChanges(true)
+          
+          if (settings.enableNotifications) {
+            feedback.settingsImported()
+          }
+          resolve(validatedSettings)
+        } catch (error) {
+          console.error('Failed to import settings:', error)
+          if (settings.errorNotifications) {
+            feedback.settingsImportFailed()
+          }
+          reject(error)
+        }
+      }
+      reader.onerror = () => reject(new Error('Failed to read file'))
+      reader.readAsText(file)
+    })
   }
 
   // Theme application
@@ -304,6 +513,8 @@ export const SettingsProvider = ({ children }) => {
     updateSettings,
     saveSettings,
     resetSettings,
+    exportSettings,
+    importSettings,
     showNotification,
     confirmAction,
     getValidAIProvider,

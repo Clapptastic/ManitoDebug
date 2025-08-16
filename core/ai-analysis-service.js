@@ -547,7 +547,7 @@ Format the response as structured JSON with detailed documentation insights.
         const response = await this.aiProvider.sendMessage(prompt, { 
           files: aiServiceFiles,
           conflicts: this.formattedFiles.insights || []
-        }, 'local');
+        });
         
         return this.parseAIResponse(response.response);
       } catch (error) {

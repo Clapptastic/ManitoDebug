@@ -900,6 +900,52 @@ app.get('/api/ai/providers', (req, res) => {
   }
 });
 
+// AI settings update endpoint
+app.post('/api/ai/settings', async (req, res) => {
+  try {
+    const { aiApiKeys, aiProvider } = req.body;
+    
+    if (!aiApiKeys || typeof aiApiKeys !== 'object') {
+      return res.status(400).json({ error: 'AI API keys are required' });
+    }
+    
+    // Update environment variables for the current process
+    if (aiApiKeys.openai) {
+      process.env.OPENAI_API_KEY = aiApiKeys.openai;
+    }
+    if (aiApiKeys.anthropic) {
+      process.env.ANTHROPIC_API_KEY = aiApiKeys.anthropic;
+    }
+    if (aiApiKeys.google) {
+      process.env.GOOGLE_API_KEY = aiApiKeys.google;
+    }
+    
+    // Reinitialize AI service with new keys
+    aiService.initializeProviders();
+    
+    logger.info('AI settings updated', { 
+      hasOpenAI: !!aiApiKeys.openai,
+      hasAnthropic: !!aiApiKeys.anthropic,
+      hasGoogle: !!aiApiKeys.google,
+      provider: aiProvider 
+    });
+    
+    res.json({ 
+      success: true, 
+      message: 'AI settings updated successfully',
+      providers: aiService.getAvailableProviders()
+    });
+    
+  } catch (error) {
+    logger.error('Failed to update AI settings', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to update AI settings', 
+      message: error.message 
+    });
+  }
+});
+
 // AI integration endpoint
 app.post('/api/ai/send', async (req, res) => {
   try {
