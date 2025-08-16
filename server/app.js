@@ -469,154 +469,150 @@ app.post('/api/upload', upload.single('projectFile'), async (req, res) => {
       userId: userId || 'anonymous'
     });
 
-    // Extract the uploaded file
-    const extractDir = path.join(__dirname, 'uploads', 'extracted', `${Date.now()}-${projectName}`);
-    await fs.mkdir(extractDir, { recursive: true });
+    // Handle single file upload (not just zip files)
+    let extractDir;
+    let scanPath;
 
-    try {
-      if (uploadedFile.originalname.endsWith('.zip')) {
+    if (uploadedFile.originalname.endsWith('.zip')) {
+      // Extract zip file
+      extractDir = path.join(__dirname, 'uploads', 'extracted', `${Date.now()}-${projectName}`);
+      await fs.mkdir(extractDir, { recursive: true });
+
+      try {
         const zip = new AdmZip(uploadedFile.path);
         zip.extractAllTo(extractDir, true);
-      } else {
-        // For tar files, we'd need additional handling
-        return res.status(400).json({
-          success: false,
-          error: 'Only zip files are currently supported'
-        });
+        scanPath = extractDir;
+      } catch (extractError) {
+        logger.error('Zip extraction failed', extractError);
+        throw new Error('Failed to extract zip file');
       }
-
-      logger.info('File extracted successfully', { extractDir });
-
-      // Clean up uploaded file
-      await fs.unlink(uploadedFile.path);
-
-      // Start scanning the extracted directory
-      const scanOptions = {
-        patterns: req.body.patterns || ['**/*.{js,jsx,ts,tsx}'],
-        excludePatterns: req.body.excludePatterns || ['node_modules/**', 'dist/**', 'build/**', '.git/**']
-      };
-
-      let scanResult;
-      try {
-        const { CodeScanner } = await import('@manito/core');
-        const scanner = new CodeScanner();
-        scanResult = await scanner.scan(extractDir);
-      } catch (error) {
-        logger.error('Scanner error:', error);
-        throw error;
-      }
-
-      // Create project and scan records
-      let project;
-      try {
-        project = await Project.create({
-          name: projectName,
-          path: extractDir,
-          description: `Uploaded project: ${uploadedFile.originalname}`,
-          source: 'upload'
-        }, userId);
-      } catch (error) {
-        logger.error('Project creation error:', error);
-        throw error;
-      }
-
-      let scan;
-      try {
-        scan = await Scan.create({
-          project_id: project.id,
-          scan_options: scanOptions,
-          status: 'running'
-        });
-
-        // Clean and serialize data for database storage
-        const cleanScanResults = {
-          files: (scanResult.files || []).map(file => ({
-            filePath: file.filePath,
-            lines: file.lines,
-            size: file.size,
-            isTypeScript: file.isTypeScript,
-            isJSX: file.isJSX,
-            complexity: file.complexity,
-            imports: file.imports || [],
-            exports: file.exports || [],
-            functions: file.functions || [],
-            variables: file.variables || []
-          })),
-          conflicts: scanResult.conflicts || [],
-          dependencies: scanResult.dependencies ? Object.entries(scanResult.dependencies).map(([from, to]) => ({ from, to })) : [],
-          metrics: {
-            filesScanned: scanResult.metrics?.filesScanned || 0,
-            linesOfCode: scanResult.metrics?.linesOfCode || 0,
-            dependencies: scanResult.metrics?.dependencies || 0,
-            conflicts: scanResult.metrics?.conflicts?.length || 0
-          }
-        };
-
-        await scan.complete(cleanScanResults);
-
-        await project.updateScanStatus('completed');
-      } catch (error) {
-        logger.error('Database operation failed', { error: error.message });
-        // Continue without database persistence
-        scan = { id: 'temp_' + Date.now(), completed_at: new Date() };
-      }
-
-      // Broadcast completion
-      broadcast('scan', { 
-        event: 'completed', 
-        scanId: scan.id,
-        projectId: project.id,
-        source: 'upload',
-        summary: {
-          files: scanResult.files.length,
-          conflicts: scanResult.conflicts.length,
-          linesOfCode: scanResult.metrics?.linesOfCode || 0
-        }
-      });
-
-      logger.info('Upload scan completed', { 
-        projectId: project.id,
-        scanId: scan.id, 
-        files: scanResult.files.length,
-        extractDir
-      });
-
-      // Return results
-      const result = {
-        ...scanResult,
-        scanId: scan.id,
-        projectId: project.id,
-        project: {
-          name: project.name,
-          path: extractDir,
-          source: 'upload'
-        },
-        savedAt: scan.completed_at,
-        extractDir // Include for cleanup later if needed
-      };
-
-      res.json({ 
-        success: true, 
-        source: 'upload',
-        data: result 
-      });
-
-    } catch (extractError) {
-      logger.error('File extraction failed', extractError);
+    } else {
+      // Handle single file upload
+      const singleFileDir = path.join(__dirname, 'uploads', 'single-files', `${Date.now()}-${projectName}`);
+      await fs.mkdir(singleFileDir, { recursive: true });
       
-      // Clean up uploaded file
-      try {
-        await fs.unlink(uploadedFile.path);
-      } catch (cleanupError) {
-        logger.error('Failed to clean up uploaded file', cleanupError);
-      }
-
-      res.status(500).json({
-        success: false,
-        error: 'Failed to extract uploaded file',
-        message: extractError.message
-      });
+      // Copy the uploaded file to the directory
+      const targetPath = path.join(singleFileDir, uploadedFile.originalname);
+      await fs.copyFile(uploadedFile.path, targetPath);
+      
+      extractDir = singleFileDir;
+      scanPath = singleFileDir;
     }
+
+    logger.info('File prepared for scanning', { extractDir, scanPath });
+
+    // Clean up uploaded file
+    await fs.unlink(uploadedFile.path);
+
+    // Start scanning the prepared directory
+    const scanOptions = {
+      patterns: req.body.patterns ? JSON.parse(req.body.patterns) : ['**/*.{js,jsx,ts,tsx}'],
+      excludePatterns: req.body.excludePatterns ? JSON.parse(req.body.excludePatterns) : ['node_modules/**', 'dist/**', 'build/**', '.git/**']
+    };
+
+    let scanResult;
+    try {
+      const { CodeScanner } = await import('@manito/core');
+      const scanner = new CodeScanner();
+      scanResult = await scanner.scan(scanPath);
+    } catch (error) {
+      logger.error('Scanner error:', error);
+      throw error;
+    }
+
+    // Create project and scan records
+    let project;
+    try {
+      project = await Project.create({
+        name: projectName,
+        path: extractDir,
+        description: `Uploaded project: ${uploadedFile.originalname}`,
+        source: 'upload'
+      }, userId);
+    } catch (error) {
+      logger.error('Project creation error:', error);
+      throw error;
+    }
+
+    let scan;
+    try {
+      scan = await Scan.create({
+        project_id: project.id,
+        scan_options: scanOptions,
+        status: 'running'
+      });
+
+      // Clean and serialize data for database storage
+      const cleanScanResults = {
+        files: (scanResult.files || []).map(file => ({
+          filePath: file.filePath,
+          lines: file.lines,
+          size: file.size,
+          isTypeScript: file.isTypeScript,
+          isJSX: file.isJSX,
+          complexity: file.complexity,
+          imports: file.imports || [],
+          exports: file.exports || [],
+          functions: file.functions || [],
+          variables: file.variables || []
+        })),
+        conflicts: scanResult.conflicts || [],
+        dependencies: scanResult.dependencies ? Object.entries(scanResult.dependencies).map(([from, to]) => ({ from, to })) : [],
+        metrics: {
+          filesScanned: scanResult.metrics?.filesScanned || 0,
+          linesOfCode: scanResult.metrics?.linesOfCode || 0,
+          dependencies: scanResult.metrics?.dependencies || 0,
+          conflicts: scanResult.metrics?.conflicts?.length || 0
+        }
+      };
+
+      await scan.complete(cleanScanResults);
+      await project.updateScanStatus('completed');
+    } catch (error) {
+      logger.error('Database operation failed', { error: error.message });
+      // Continue without database persistence
+      scan = { id: 'temp_' + Date.now(), completed_at: new Date() };
+    }
+
+    // Broadcast completion
+    broadcast('scan', { 
+      event: 'completed', 
+      scanId: scan.id,
+      projectId: project.id,
+      source: 'upload',
+      summary: {
+        files: scanResult.files.length,
+        conflicts: scanResult.conflicts.length,
+        linesOfCode: scanResult.metrics?.linesOfCode || 0
+      }
+    });
+
+    logger.info('Upload scan completed', { 
+      projectId: project.id,
+      scanId: scan.id, 
+      files: scanResult.files.length,
+      extractDir
+    });
+
+    // Return results
+    const result = {
+      ...scanResult,
+      scanId: scan.id,
+      projectId: project.id,
+      project: {
+        name: project.name,
+        path: extractDir,
+        source: 'upload'
+      },
+      savedAt: scan.completed_at,
+      extractDir // Include for cleanup later if needed
+    };
+
+    res.json({ 
+      success: true, 
+      source: 'upload',
+      data: result 
+    });
 
   } catch (error) {
     logger.error('Upload endpoint error', error);
