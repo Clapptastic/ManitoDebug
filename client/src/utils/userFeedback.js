@@ -349,7 +349,7 @@ export class UserFeedback {
 
 // React hook for user feedback
 export const useUserFeedback = () => {
-  const toast = useToast()
+  const { toast } = useToast()
   return new UserFeedback(toast)
 }
 

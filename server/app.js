@@ -23,6 +23,7 @@ import { authenticate, optionalAuth, apiRateLimit, userContext } from './middlew
 import StreamingScanner from './services/scanner.js';
 import scanQueue from './services/scanQueue.js';
 import migrations from './services/migrations.js';
+import AIAnalysisFormatter from '../core/ai-analysis.js';
 
 // Logger setup
 const logger = winston.createLogger({
@@ -289,10 +290,15 @@ app.post('/api/scan', async (req, res) => {
     }
 
     const { path: scanPath, async: isAsync = false, options = {} } = value;
+    
+    // Resolve relative paths to absolute paths relative to project root (one level up from server)
+    const projectRoot = path.resolve(__dirname, '..');
+    const resolvedPath = path.isAbsolute(scanPath) ? scanPath : path.resolve(projectRoot, scanPath);
+    
     const userId = req.user ? req.user.id : null;
     
     logger.info('Starting code scan', { 
-      path: scanPath, 
+      path: resolvedPath, 
       async: isAsync, 
       userId: userId || 'anonymous'
     });
@@ -300,12 +306,12 @@ app.post('/api/scan', async (req, res) => {
     if (isAsync) {
       // Async mode: Queue the job and return immediately
       const jobId = await scanQueue.addJob({
-        path: scanPath,
+        path: resolvedPath,
         options,
         userId
       });
 
-      logger.info('Scan queued', { jobId, path: scanPath });
+      logger.info('Scan queued', { jobId, path: resolvedPath });
 
       res.json({
         success: true,
@@ -315,7 +321,7 @@ app.post('/api/scan', async (req, res) => {
         data: {
           jobId,
           status: 'queued',
-          path: scanPath
+          path: resolvedPath
         }
       });
 
@@ -325,7 +331,7 @@ app.post('/api/scan', async (req, res) => {
       try {
         const { CodeScanner } = await import('@manito/core');
         const scanner = new CodeScanner();
-        scanResult = await scanner.scan(scanPath);
+        scanResult = await scanner.scan(resolvedPath);
       } catch (error) {
         logger.error('Scanner error:', error);
         throw error;
@@ -346,13 +352,13 @@ app.post('/api/scan', async (req, res) => {
       // Find or create project and save results
       let project;
       try {
-        project = await Project.findByPath(scanPath, userId);
+        project = await Project.findByPath(resolvedPath, userId);
         if (!project) {
-          const projectName = scanPath.split('/').pop() || 'Unknown Project';
+          const projectName = resolvedPath.split('/').pop() || 'Unknown Project';
           project = await Project.create({
             name: projectName,
-            path: scanPath,
-            description: `Auto-created for scan of ${scanPath}`
+            path: resolvedPath,
+            description: `Auto-created for scan of ${resolvedPath}`
           }, userId);
         }
       } catch (error) {
@@ -928,6 +934,209 @@ app.post('/api/ai/send', async (req, res) => {
   }
 });
 
+// AI Analysis endpoint - generates comprehensive data for AI tools
+app.post('/api/ai/analyze', async (req, res) => {
+  try {
+    const { path: scanPath, options = {} } = req.body;
+    
+    if (!scanPath) {
+      return res.status(400).json({ error: 'Path is required' });
+    }
+
+    // Resolve relative paths to absolute paths relative to project root
+    const projectRoot = path.resolve(__dirname, '..');
+    const resolvedPath = path.isAbsolute(scanPath) ? scanPath : path.resolve(projectRoot, scanPath);
+
+    logger.info('Starting comprehensive AI analysis', { path: resolvedPath });
+
+    // Step 1: Perform initial scan to get file list
+    const { CodeScanner } = await import('@manito/core');
+    const scanner = new CodeScanner(options);
+    const scanResult = await scanner.scan(resolvedPath);
+
+    // Step 2: Get all file paths for AI analysis
+    const filePaths = scanResult.files
+      .filter(file => file && file.path)
+      .map(file => file.path);
+
+    // Step 3: Perform AI-powered analysis
+    const { AIAnalysisService } = await import('@manito/core');
+    const aiAnalysisService = new AIAnalysisService(aiService);
+    const aiAnalysis = await aiAnalysisService.analyzeCodebase(filePaths, options);
+
+    // Step 4: Generate comprehensive AI-ready analysis data
+    const aiAnalysisData = {
+      metadata: {
+        projectName: scanResult.packageInfo?.name || 'Unknown Project',
+        version: scanResult.packageInfo?.version || '1.0.0',
+        scanTimestamp: new Date().toISOString(),
+        totalFiles: scanResult.metrics.filesScanned,
+        totalLines: scanResult.metrics.linesOfCode,
+        totalDependencies: scanResult.metrics.dependencies,
+        projectType: detectProjectType(scanResult),
+        framework: detectFramework(scanResult),
+        buildTools: detectBuildTools(scanResult)
+      },
+      
+      // AI-powered quality metrics
+      qualityMetrics: {
+        complexity: aiAnalysis.aiInsights.qualityMetrics.complexity,
+        maintainability: aiAnalysis.aiInsights.qualityMetrics.maintainability,
+        readability: aiAnalysis.aiInsights.qualityMetrics.readability,
+        testability: aiAnalysis.aiInsights.qualityMetrics.testability,
+        documentation: aiAnalysis.aiInsights.qualityMetrics.documentation,
+        hotspots: aiAnalysis.aiInsights.qualityMetrics.hotspots,
+        trends: aiAnalysis.aiInsights.qualityMetrics.trends,
+        distribution: aiAnalysis.aiInsights.qualityMetrics.distribution
+      },
+
+      // AI-powered architecture analysis
+      architecture: {
+        patterns: aiAnalysis.aiInsights.architectureAnalysis.patterns,
+        layers: aiAnalysis.aiInsights.architectureAnalysis.layers,
+        boundaries: aiAnalysis.aiInsights.architectureAnalysis.boundaries,
+        coupling: aiAnalysis.aiInsights.architectureAnalysis.coupling,
+        cohesion: aiAnalysis.aiInsights.architectureAnalysis.cohesion,
+        violations: aiAnalysis.aiInsights.architectureAnalysis.violations,
+        recommendations: aiAnalysis.aiInsights.architectureAnalysis.recommendations
+      },
+
+      // AI-powered security assessment
+      security: {
+        vulnerabilities: aiAnalysis.aiInsights.securityAssessment.vulnerabilities,
+        risks: aiAnalysis.aiInsights.securityAssessment.risks,
+        bestPractices: aiAnalysis.aiInsights.securityAssessment.bestPractices,
+        compliance: aiAnalysis.aiInsights.securityAssessment.compliance,
+        recommendations: aiAnalysis.aiInsights.securityAssessment.recommendations,
+        severity: aiAnalysis.aiInsights.securityAssessment.severity
+      },
+
+      // AI-powered performance analysis
+      performance: {
+        bottlenecks: aiAnalysis.aiInsights.performanceAnalysis.bottlenecks,
+        optimizations: aiAnalysis.aiInsights.performanceAnalysis.optimizations,
+        metrics: aiAnalysis.aiInsights.performanceAnalysis.metrics,
+        patterns: aiAnalysis.aiInsights.performanceAnalysis.patterns,
+        recommendations: aiAnalysis.aiInsights.performanceAnalysis.recommendations
+      },
+
+      // AI-powered code patterns
+      patterns: {
+        designPatterns: aiAnalysis.aiInsights.codePatterns.designPatterns,
+        antiPatterns: aiAnalysis.aiInsights.codePatterns.antiPatterns,
+        codeSmells: aiAnalysis.aiInsights.codePatterns.codeSmells,
+        duplication: aiAnalysis.aiInsights.codePatterns.duplication,
+        consistency: aiAnalysis.aiInsights.codePatterns.consistency,
+        recommendations: aiAnalysis.aiInsights.codePatterns.recommendations
+      },
+
+      // AI-powered technical debt assessment
+      technicalDebt: {
+        total: aiAnalysis.aiInsights.technicalDebt.total,
+        categories: aiAnalysis.aiInsights.technicalDebt.categories,
+        hotspots: aiAnalysis.aiInsights.technicalDebt.hotspots,
+        impact: aiAnalysis.aiInsights.technicalDebt.impact,
+        recommendations: aiAnalysis.aiInsights.technicalDebt.recommendations
+      },
+
+      // AI-powered maintainability assessment
+      maintainability: {
+        score: aiAnalysis.aiInsights.maintainability.score,
+        factors: aiAnalysis.aiInsights.maintainability.factors,
+        trends: aiAnalysis.aiInsights.maintainability.trends,
+        recommendations: aiAnalysis.aiInsights.maintainability.recommendations
+      },
+
+      // AI-powered testability assessment
+      testability: {
+        score: aiAnalysis.aiInsights.testability.score,
+        coverage: aiAnalysis.aiInsights.testability.coverage,
+        gaps: aiAnalysis.aiInsights.testability.gaps,
+        recommendations: aiAnalysis.aiInsights.testability.recommendations
+      },
+
+      // AI-powered documentation assessment
+      documentation: {
+        coverage: aiAnalysis.aiInsights.documentation.coverage,
+        quality: aiAnalysis.aiInsights.documentation.quality,
+        gaps: aiAnalysis.aiInsights.documentation.gaps,
+        recommendations: aiAnalysis.aiInsights.documentation.recommendations
+      },
+
+      // Comprehensive recommendations
+      recommendations: {
+        refactoring: aiAnalysis.aiInsights.recommendations.refactoring,
+        optimization: aiAnalysis.aiInsights.recommendations.optimization,
+        security: aiAnalysis.aiInsights.recommendations.security,
+        testing: aiAnalysis.aiInsights.recommendations.testing,
+        documentation: aiAnalysis.aiInsights.recommendations.documentation,
+        architecture: aiAnalysis.aiInsights.recommendations.architecture,
+        priority: aiAnalysis.aiInsights.recommendations.priority
+      },
+
+      // Enhanced dependency graph with AI insights
+      dependencyGraph: {
+        nodes: (scanResult.dependencyGraph?.nodes || []).map(node => ({
+          ...node,
+          quality: getNodeQuality(node, aiAnalysis),
+          architecture: getNodeArchitecture(node, aiAnalysis),
+          security: getNodeSecurity(node, aiAnalysis),
+          performance: getNodePerformance(node, aiAnalysis)
+        })),
+        edges: scanResult.dependencyGraph?.edges || [],
+        clusters: scanResult.dependencyGraph?.clusters || [],
+        layers: scanResult.dependencyGraph?.layers || { presentation: [], business: [], data: [], infrastructure: [], shared: [] }
+      },
+
+      // Issues with AI-powered detection
+      issues: {
+        circularDependencies: scanResult.issues?.circularDependencies || [],
+        deadCode: scanResult.issues?.deadCode || { unusedFunctions: [], unusedVariables: [], unusedImports: [], unreachableCode: [] },
+        duplicatePatterns: aiAnalysis.aiInsights.codePatterns.duplication,
+        unusedDependencies: scanResult.issues?.unusedDependencies || [],
+        securityVulnerabilities: {
+          high: aiAnalysis.aiInsights.securityAssessment.vulnerabilities.filter(v => v.severity === 'high'),
+          medium: aiAnalysis.aiInsights.securityAssessment.vulnerabilities.filter(v => v.severity === 'medium'),
+          low: aiAnalysis.aiInsights.securityAssessment.vulnerabilities.filter(v => v.severity === 'low'),
+          total: aiAnalysis.aiInsights.securityAssessment.vulnerabilities.length
+        },
+        performanceIssues: {
+          largeFiles: aiAnalysis.aiInsights.performanceAnalysis.bottlenecks,
+          complexFunctions: aiAnalysis.aiInsights.qualityMetrics.hotspots,
+          heavyDependencies: scanResult.issues?.heavyDependencies || [],
+          inefficientPatterns: aiAnalysis.aiInsights.performanceAnalysis.patterns
+        }
+      },
+
+      // Scan metadata
+      scanMetadata: {
+        scanId: scanResult.id,
+        scanTime: scanResult.scanTime,
+        rootPath: scanResult.rootPath,
+        timestamp: scanResult.timestamp,
+        aiAnalysisVersion: aiAnalysis.version,
+        aiAnalysisTimestamp: aiAnalysis.timestamp
+      },
+
+      // Raw AI analysis data for advanced processing
+      rawAIAnalysis: aiAnalysis
+    };
+
+    res.json({
+      success: true,
+      data: aiAnalysisData,
+      message: 'Comprehensive AI analysis completed successfully'
+    });
+
+  } catch (error) {
+    logger.error('AI analysis error:', error);
+    res.status(500).json({
+      error: 'AI analysis failed',
+      message: error.message
+    });
+  }
+});
+
 // Projects endpoints
 app.get('/api/projects', async (req, res) => {
   try {
@@ -1128,6 +1337,53 @@ server.listen(PORT, async () => {
   logger.info('  • WebSocket real-time progress updates');
   logger.info('  • Worker threads for CPU-intensive tasks');
 });
+
+// Helper functions for AI analysis
+function detectProjectType(scanResult) {
+  if (scanResult.packageInfo?.dependencies?.react) return 'react';
+  if (scanResult.packageInfo?.dependencies?.vue) return 'vue';
+  if (scanResult.packageInfo?.dependencies?.angular) return 'angular';
+  if (scanResult.packageInfo?.dependencies?.express) return 'nodejs';
+  return 'unknown';
+}
+
+function detectFramework(scanResult) {
+  if (scanResult.packageInfo?.dependencies?.react) return 'react';
+  if (scanResult.packageInfo?.dependencies?.vue) return 'vue';
+  if (scanResult.packageInfo?.dependencies?.angular) return 'angular';
+  if (scanResult.packageInfo?.dependencies?.express) return 'express';
+  return 'none';
+}
+
+function detectBuildTools(scanResult) {
+  const buildTools = [];
+  if (scanResult.packageInfo?.devDependencies?.webpack) buildTools.push('webpack');
+  if (scanResult.packageInfo?.devDependencies?.vite) buildTools.push('vite');
+  if (scanResult.packageInfo?.devDependencies?.babel) buildTools.push('babel');
+  if (scanResult.packageInfo?.devDependencies?.typescript) buildTools.push('typescript');
+  return buildTools;
+}
+
+// Helper methods for node enhancement
+function getNodeQuality(node, aiAnalysis) {
+  const file = aiAnalysis.files.find(f => f.name === node.label);
+  return file ? file.metrics : { complexity: 0, maintainability: 0, readability: 0 };
+}
+
+function getNodeArchitecture(node, aiAnalysis) {
+  const file = aiAnalysis.files.find(f => f.name === node.label);
+  return file ? file.architecture : { layer: 'unknown', pattern: 'unknown' };
+}
+
+function getNodeSecurity(node, aiAnalysis) {
+  const file = aiAnalysis.files.find(f => f.name === node.label);
+  return file ? file.security : { vulnerabilities: [], risks: [] };
+}
+
+function getNodePerformance(node, aiAnalysis) {
+  const file = aiAnalysis.files.find(f => f.name === node.label);
+  return file ? file.performance : { bottlenecks: [], optimizations: [] };
+}
 
 process.on('SIGTERM', () => {
   logger.info('SIGTERM received, shutting down gracefully');

@@ -28,6 +28,9 @@ export class CodeScanner {
     const startTime = Date.now();
     
     try {
+      // Analyze package.json for external dependencies
+      const packageInfo = await this.analyzePackageJson(rootPath);
+      
       const files = await this.findFiles(rootPath);
       console.log(`Found ${files.length} files to scan`);
       
@@ -56,6 +59,7 @@ export class CodeScanner {
         rootPath,
         files: results,
         dependencies: this.serializeDependencyGraph(),
+        packageInfo,
         metrics: this.metrics,
         conflicts: this.metrics.conflicts
       };
@@ -117,12 +121,28 @@ export class CodeScanner {
         plugins.push('jsx');
       }
       
-      const parseOptions = {
-        sourceType: 'module',
-        allowImportExportEverywhere: true,
-        allowReturnOutsideFunction: true,
-        plugins: plugins
-      };
+      // Try to detect if this is a CommonJS file (has require/module.exports but no ES6 imports)
+      const hasRequire = /require\s*\(/.test(content);
+      const hasModuleExports = /module\.exports/.test(content);
+      const hasES6Imports = /import\s+/.test(content);
+      
+      let parseOptions;
+      if (hasRequire || hasModuleExports) {
+        // CommonJS file
+        parseOptions = {
+          sourceType: 'script',
+          allowReturnOutsideFunction: true,
+          plugins: plugins
+        };
+      } else {
+        // ES6 module
+        parseOptions = {
+          sourceType: 'module',
+          allowImportExportEverywhere: true,
+          allowReturnOutsideFunction: true,
+          plugins: plugins
+        };
+      }
 
       try {
         ast = parse(content, parseOptions);
@@ -164,6 +184,41 @@ export class CodeScanner {
             }))
           });
           self.addDependency(filePath, importPath);
+        },
+        
+        // Add support for dynamic imports and CommonJS require
+        CallExpression(path) {
+          const node = path.node;
+          
+          // Dynamic imports
+          if (node.callee.type === 'Import' && node.arguments.length > 0) {
+            const importPath = node.arguments[0];
+            if (importPath.type === 'StringLiteral') {
+              analysis.imports.push({
+                source: importPath.value,
+                specifiers: [],
+                dynamic: true
+              });
+              self.addDependency(filePath, importPath.value);
+            }
+          }
+          
+          // CommonJS require
+          if (node.callee.name === 'require' && node.arguments.length > 0) {
+            const requirePath = node.arguments[0];
+            if (requirePath.type === 'StringLiteral') {
+              analysis.imports.push({
+                source: requirePath.value,
+                specifiers: [{
+                  type: 'require',
+                  local: 'require',
+                  imported: requirePath.value
+                }],
+                commonjs: true
+              });
+              self.addDependency(filePath, requirePath.value);
+            }
+          }
         },
         
         ExportNamedDeclaration(path) {
@@ -239,12 +294,77 @@ export class CodeScanner {
     }
   }
 
+  async analyzePackageJson(rootPath) {
+    try {
+      const packagePath = path.join(rootPath, 'package.json');
+      const content = await fs.readFile(packagePath, 'utf-8');
+      const pkg = JSON.parse(content);
+      
+      return {
+        name: pkg.name,
+        version: pkg.version,
+        dependencies: pkg.dependencies || {},
+        devDependencies: pkg.devDependencies || {},
+        peerDependencies: pkg.peerDependencies || {},
+        optionalDependencies: pkg.optionalDependencies || {},
+        scripts: pkg.scripts || {},
+        main: pkg.main,
+        module: pkg.module,
+        exports: pkg.exports,
+        type: pkg.type || 'commonjs'
+      };
+    } catch (error) {
+      console.warn('Could not read package.json:', error.message);
+      return null;
+    }
+  }
+
   addDependency(from, to) {
     if (!this.dependencyGraph.has(from)) {
       this.dependencyGraph.set(from, new Set());
     }
     this.dependencyGraph.get(from).add(to);
     this.metrics.dependencies++;
+  }
+
+  resolveModulePath(importPath, fromFile) {
+    // Handle different types of imports
+    if (importPath.startsWith('.')) {
+      // Relative import - resolve relative to importing file
+      const fromDir = path.dirname(fromFile);
+      return path.resolve(fromDir, importPath);
+    } else if (importPath.startsWith('/')) {
+      // Absolute import - resolve relative to project root
+      return path.resolve(this.rootPath, importPath.slice(1));
+    } else if (importPath.startsWith('@')) {
+      // Alias import - try to resolve using common patterns
+      return this.resolveAlias(importPath, fromFile);
+    } else {
+      // External package - mark as external dependency
+      return `external:${importPath}`;
+    }
+  }
+
+  resolveAlias(aliasPath, fromFile) {
+    // Common alias patterns
+    const aliasMap = {
+      '@': 'src',
+      '~': '',
+      '@app': 'src/app',
+      '@components': 'src/components',
+      '@utils': 'src/utils',
+      '@types': 'src/types'
+    };
+
+    for (const [alias, target] of Object.entries(aliasMap)) {
+      if (aliasPath.startsWith(alias)) {
+        const relativePath = aliasPath.replace(alias, target);
+        return path.resolve(this.rootPath, relativePath);
+      }
+    }
+
+    // Fallback to original path
+    return aliasPath;
   }
 
   detectConflicts() {
@@ -339,38 +459,51 @@ export class CodeScanner {
     let complexity = 1;
     
     try {
-      traverseFunction(node, {
-        IfStatement() {
+      // Use a simpler approach that doesn't require scope traversal
+      const nodeType = node.type;
+      
+      // Count control flow statements
+      if (nodeType === 'IfStatement' || 
+          nodeType === 'WhileStatement' || 
+          nodeType === 'ForStatement' || 
+          nodeType === 'ForInStatement' || 
+          nodeType === 'ForOfStatement' || 
+          nodeType === 'SwitchCase' || 
+          nodeType === 'CatchClause' || 
+          nodeType === 'ConditionalExpression') {
+        complexity++;
+      }
+      
+      // For logical expressions, we need to traverse the node
+      if (nodeType === 'LogicalExpression') {
+        if (node.operator === '&&' || node.operator === '||') {
           complexity++;
-        },
-        WhileStatement() {
-          complexity++;
-        },
-        ForStatement() {
-          complexity++;
-        },
-        ForInStatement() {
-          complexity++;
-        },
-        ForOfStatement() {
-          complexity++;
-        },
-        SwitchCase() {
-          complexity++;
-        },
-        CatchClause() {
-          complexity++;
-        },
-        ConditionalExpression() {
-          complexity++;
-        },
-        LogicalExpression(path) {
-          const logicalNode = path.node;
-          if (logicalNode.operator === '&&' || logicalNode.operator === '||') {
-            complexity++;
-          }
         }
-      });
+      }
+      
+      // Recursively check child nodes
+      if (node.body) {
+        if (Array.isArray(node.body)) {
+          for (const child of node.body) {
+            complexity += this.calculateComplexity(child);
+          }
+        } else {
+          complexity += this.calculateComplexity(node.body);
+        }
+      }
+      
+      if (node.consequent) {
+        complexity += this.calculateComplexity(node.consequent);
+      }
+      
+      if (node.alternate) {
+        complexity += this.calculateComplexity(node.alternate);
+      }
+      
+      if (node.test) {
+        complexity += this.calculateComplexity(node.test);
+      }
+      
     } catch (error) {
       console.warn('Error calculating complexity:', error.message);
     }
@@ -385,6 +518,261 @@ export class CodeScanner {
     }
     return graph;
   }
+
+  // Generate comprehensive data structure for AI visualization tools
+  generateVisualizationData() {
+    const nodes = [];
+    const edges = [];
+    const metadata = {
+      totalFiles: this.metrics.filesScanned,
+      totalLines: this.metrics.linesOfCode,
+      totalDependencies: this.metrics.dependencies,
+      conflicts: this.metrics.conflicts,
+      circularDependencies: this.findCircularDependencies(),
+      isolatedFiles: [],
+      highlyConnectedFiles: [],
+      duplicatePatterns: [],
+      complexityHotspots: this.findComplexityHotspots(),
+      dependencyChains: this.findDependencyChains()
+    };
+
+    // Create nodes for each file
+    for (const [filePath, deps] of this.dependencyGraph.entries()) {
+      const fileAnalysis = this.getFileAnalysis(filePath);
+      const node = {
+        id: filePath,
+        label: path.basename(filePath),
+        type: 'file',
+        data: {
+          path: filePath,
+          size: fileAnalysis?.size || 0,
+          lines: fileAnalysis?.lines || 0,
+          complexity: fileAnalysis?.complexity || 0,
+          isTypeScript: fileAnalysis?.isTypeScript || false,
+          isJSX: fileAnalysis?.isJSX || false,
+          functions: fileAnalysis?.functions || [],
+          variables: fileAnalysis?.variables || [],
+          imports: fileAnalysis?.imports || [],
+          exports: fileAnalysis?.exports || [],
+          dependencyCount: deps.size,
+          isExternal: false,
+          category: this.categorizeFile(filePath, fileAnalysis)
+        }
+      };
+      nodes.push(node);
+
+      // Track isolated files
+      if (deps.size === 0) {
+        metadata.isolatedFiles.push(filePath);
+      }
+
+      // Track highly connected files
+      if (deps.size > 10) {
+        metadata.highlyConnectedFiles.push(filePath);
+      }
+    }
+
+    // Create edges for dependencies
+    for (const [fromFile, deps] of this.dependencyGraph.entries()) {
+      for (const toDep of deps) {
+        const edge = {
+          id: `${fromFile}->${toDep}`,
+          source: fromFile,
+          target: toDep,
+          type: 'dependency',
+          data: {
+            dependencyType: this.getDependencyType(fromFile, toDep),
+            isCircular: this.isCircularDependency(fromFile, toDep),
+            isExternal: !toDep.startsWith('.') && !toDep.startsWith('/'),
+            importSpecifiers: this.getImportSpecifiers(fromFile, toDep)
+          }
+        };
+        edges.push(edge);
+      }
+    }
+
+    // Add external dependency nodes
+    const externalDeps = this.getExternalDependencies();
+    for (const [packageName, usage] of externalDeps.entries()) {
+      const node = {
+        id: `external:${packageName}`,
+        label: packageName,
+        type: 'external',
+        data: {
+          packageName,
+          usageCount: usage.length,
+          usedBy: usage,
+          category: 'external'
+        }
+      };
+      nodes.push(node);
+    }
+
+    return {
+      nodes,
+      edges,
+      metadata,
+      analysis: {
+        timestamp: new Date().toISOString(),
+        scanTime: Date.now(),
+        version: '1.0.0'
+      }
+    };
+  }
+
+  getFileAnalysis(filePath) {
+    // This would need to be implemented to return the analysis for a specific file
+    // For now, return a placeholder
+    return {
+      size: 0,
+      lines: 0,
+      complexity: 0,
+      isTypeScript: false,
+      isJSX: false,
+      functions: [],
+      variables: [],
+      imports: [],
+      exports: []
+    };
+  }
+
+  categorizeFile(filePath, analysis) {
+    const ext = path.extname(filePath);
+    const dir = path.dirname(filePath);
+    
+    if (ext === '.ts' || ext === '.tsx') return 'typescript';
+    if (ext === '.jsx') return 'jsx';
+    if (ext === '.js') return 'javascript';
+    if (dir.includes('components')) return 'component';
+    if (dir.includes('utils') || dir.includes('helpers')) return 'utility';
+    if (dir.includes('services')) return 'service';
+    if (dir.includes('models')) return 'model';
+    if (dir.includes('tests')) return 'test';
+    if (filePath.includes('index.')) return 'index';
+    
+    return 'other';
+  }
+
+  getDependencyType(fromFile, toDep) {
+    // Determine the type of dependency
+    if (toDep.startsWith('.')) return 'relative';
+    if (toDep.startsWith('/')) return 'absolute';
+    if (toDep.startsWith('@')) return 'alias';
+    return 'external';
+  }
+
+  isCircularDependency(fromFile, toDep) {
+    const cycles = this.findCircularDependencies();
+    return cycles.some(cycle => 
+      cycle.includes(fromFile) && cycle.includes(toDep)
+    );
+  }
+
+  getImportSpecifiers(fromFile, toDep) {
+    // This would need to be implemented to return the actual import specifiers
+    return [];
+  }
+
+  getExternalDependencies() {
+    const externalDeps = new Map();
+    
+    for (const [file, deps] of this.dependencyGraph.entries()) {
+      for (const dep of deps) {
+        if (!dep.startsWith('.') && !dep.startsWith('/') && !dep.startsWith('@')) {
+          if (!externalDeps.has(dep)) {
+            externalDeps.set(dep, []);
+          }
+          externalDeps.get(dep).push(file);
+        }
+      }
+    }
+    
+    return externalDeps;
+  }
+
+  findDuplicatePatterns() {
+    const patterns = new Map();
+    const duplicates = [];
+
+    for (const [file, deps] of this.dependencyGraph.entries()) {
+      const depArray = Array.from(deps).sort();
+      const pattern = depArray.join(',');
+      
+      if (!patterns.has(pattern)) {
+        patterns.set(pattern, []);
+      }
+      patterns.get(pattern).push(file);
+    }
+
+    for (const [pattern, files] of patterns.entries()) {
+      if (files.length > 1) {
+        duplicates.push({
+          pattern: pattern.split(','),
+          files,
+          count: files.length
+        });
+      }
+    }
+
+    return duplicates;
+  }
+
+  findComplexityHotspots() {
+    const hotspots = [];
+    
+    for (const [file, deps] of this.dependencyGraph.entries()) {
+      const analysis = this.getFileAnalysis(file);
+      if (analysis.complexity > 10) {
+        hotspots.push({
+          file,
+          complexity: analysis.complexity,
+          lines: analysis.lines,
+          functions: analysis.functions.length
+        });
+      }
+    }
+
+    return hotspots.sort((a, b) => b.complexity - a.complexity);
+  }
+
+  findDependencyChains() {
+    const chains = [];
+    const visited = new Set();
+
+    const dfs = (file, chain = []) => {
+      if (visited.has(file)) return;
+      visited.add(file);
+
+      const newChain = [...chain, file];
+      const deps = this.dependencyGraph.get(file) || new Set();
+
+      if (deps.size === 0) {
+        // End of chain
+        if (newChain.length > 2) {
+          chains.push(newChain);
+        }
+      } else {
+        for (const dep of deps) {
+          if (!newChain.includes(dep)) {
+            dfs(dep, newChain);
+          }
+        }
+      }
+    };
+
+    for (const file of this.dependencyGraph.keys()) {
+      if (!visited.has(file)) {
+        dfs(file);
+      }
+    }
+
+    return chains;
+  }
 }
 
 export default CodeScanner;
+
+// Export AI analysis services
+export { AIFileFormatter } from './ai-file-formatter.js';
+export { AIAnalysisService } from './ai-analysis-service.js';
+export { VisualizationConfig, VisualizationHelpers } from './visualization-config.js';

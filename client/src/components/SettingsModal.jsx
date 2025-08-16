@@ -607,6 +607,7 @@ function SettingsModal({ isOpen, onClose }) {
         </div>
 
         {/* API Keys Section */}
+        <form id="ai-settings-form" onSubmit={(e) => e.preventDefault()} className="hidden"></form>
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <div>
@@ -639,6 +640,7 @@ function SettingsModal({ isOpen, onClose }) {
                 })}
                 placeholder="sk-..."
                 className="input-field w-full text-sm"
+                form="ai-settings-form"
               />
               <div className="flex items-center justify-between mt-2">
                 <select
@@ -681,6 +683,7 @@ function SettingsModal({ isOpen, onClose }) {
                 })}
                 placeholder="sk-ant-..."
                 className="input-field w-full text-sm"
+                form="ai-settings-form"
               />
               <div className="flex items-center justify-between mt-2">
                 <select
@@ -723,6 +726,7 @@ function SettingsModal({ isOpen, onClose }) {
                 })}
                 placeholder="AIza..."
                 className="input-field w-full text-sm"
+                form="ai-settings-form"
               />
               <div className="flex items-center justify-between mt-2">
                 <select
@@ -764,6 +768,7 @@ function SettingsModal({ isOpen, onClose }) {
                 })}
                 placeholder="Custom API key or endpoint URL"
                 className="input-field w-full text-sm"
+                form="ai-settings-form"
               />
               <p className="text-xs text-gray-500 mt-1">
                 For custom AI endpoints or other providers
