@@ -1072,7 +1072,6 @@ function SettingsModal({ isOpen, onClose }) {
           </div>
         </div>
       </div>
-      {Dialog}
     </div>
   )
 }
