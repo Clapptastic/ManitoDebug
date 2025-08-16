@@ -98,12 +98,34 @@
   font-family: ui-monospace, monospace;
   font-size: 12px;
   fill: #e5e7eb;
-  pointer-events: none;
+}
+
+/* Toast animations */
+@keyframes slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-slide-up {
+  animation: slide-up 0.3s ease-out;
 }
 
 /* Animation classes */
 .fade-in {
   animation: fadeIn 0.3s ease-in;
+}
+
+/* Global tooltip styles to ensure visibility */
+.tooltip-portal {
+  position: fixed !important;
+  z-index: 99999 !important;
+  pointer-events: none !important;
 }
 
 @keyframes fadeIn {

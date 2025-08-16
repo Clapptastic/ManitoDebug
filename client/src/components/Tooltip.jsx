@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 
 function Tooltip({ 
   children, 
@@ -127,14 +128,14 @@ function Tooltip({
         {children}
       </div>
 
-      {isVisible && (
+      {isVisible && createPortal(
         <div
           ref={tooltipRef}
           className={`
-            fixed z-[9999] px-3 py-2 text-sm text-white 
+            tooltip-portal px-3 py-2 text-sm text-white 
             bg-gray-900/95 border border-gray-700/50 
             rounded-lg shadow-lg backdrop-blur-sm
-            pointer-events-none animate-fade-in
+            animate-fade-in
             ${className}
           `}
           style={{
@@ -157,7 +158,8 @@ function Tooltip({
               `}
             />
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </>
   )

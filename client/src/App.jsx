@@ -306,7 +306,7 @@ function AppContent() {
           onOpenSettings={() => setShowSettings(true)}
         />
         
-        <main className="flex-1 flex flex-col overflow-hidden">
+        <main className="flex-1 flex flex-col overflow-visible">
           {/* Toolbar */}
           <div className="glass-panel m-4 p-4 flex items-center justify-between overflow-visible">
             <div className="flex space-x-4">
