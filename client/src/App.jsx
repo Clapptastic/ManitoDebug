@@ -201,8 +201,7 @@ function AppContent() {
   ]
 
   return (
-    <ToastProvider>
-      <div className="h-screen bg-gray-950 flex flex-col overflow-hidden">
+    <div className="h-screen bg-gray-950 flex flex-col overflow-hidden">
         <Header 
           isConnected={isConnected} 
           healthData={healthData}
