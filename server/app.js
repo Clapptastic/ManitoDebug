@@ -26,7 +26,7 @@ import migrations from './services/migrations.js';
 import AIAnalysisFormatter from '../core/ai-analysis.js';
 import WebSocketService from './services/websocket.js';
 import semanticSearchService from './services/semanticSearch.js';
-import { getPortConfig, validatePortConfig } from './config/ports.js';
+import { validateConfig } from './config/ports.js';
 import dynamicPortManager from './services/portManager.js';
 
 // Logger setup
@@ -219,10 +219,16 @@ app.use('/api/auth', authRoutes);
   // Port configuration endpoint
   app.get('/api/ports', (req, res) => {
     try {
-      const config = dynamicPortManager.exportForClient();
+      const portInfo = dynamicPortManager.getPortInfo();
       res.json({
         success: true,
-        data: config
+        data: {
+          server: portInfo.config.server,
+          client: portInfo.config.client,
+          websocket: portInfo.config.websocket,
+          environment: portInfo.environment,
+          urls: portInfo.urls
+        }
       });
     } catch (error) {
       res.status(500).json({
@@ -1504,10 +1510,15 @@ try {
   PORT = dynamicPortManager.getServerPort();
   
   // Validate configuration
-  const validation = validatePortConfig(portConfig);
+  const validation = validateConfig(portConfig);
   if (!validation.valid) {
     logger.warn('⚠️  Port configuration validation issues:');
     validation.issues.forEach(issue => logger.warn(`  - ${issue}`));
+  }
+  
+  if (validation.warnings.length > 0) {
+    logger.warn('⚠️  Port configuration warnings:');
+    validation.warnings.forEach(warning => logger.warn(`  - ${warning}`));
   }
   
   logger.info(`🔧 Environment: ${process.env.NODE_ENV || 'development'}`);

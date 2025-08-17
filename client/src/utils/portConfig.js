@@ -71,7 +71,8 @@ class DynamicPortConfig {
   }
 
   getWebSocketUrl() {
-    return `ws://localhost:${this.getWebSocketPort()}`;
+    // WebSocket service is attached to the HTTP server, so use the same port
+    return `ws://localhost:${this.getServerPort()}/ws`;
   }
 
   // Auto-detect server port by trying common ports
