@@ -47,6 +47,9 @@ ENV REDIS_PORT_RANGE_END=6389
 ENV MONITORING_PORT_RANGE_START=9090
 ENV MONITORING_PORT_RANGE_END=9099
 
+# Email Configuration - Ensures manito.ai emails are accepted
+ENV ALLOWED_EMAIL_DOMAINS=manito.ai,manito.com,gmail.com,yahoo.com,outlook.com,hotmail.com
+
 # Expose dynamic port ranges
 EXPOSE 3000-3999 5432-5439 6379-6389 9090-9099 9229
 

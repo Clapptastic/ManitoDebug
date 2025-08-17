@@ -20,6 +20,7 @@
     "test:dynamic-ports": "node scripts/test-dynamic-port-management.js",
     "test:dynamic-port-manager": "node scripts/test-dynamic-port-manager.js",
     "test:fullstack-dynamic-ports": "node scripts/test-fullstack-dynamic-ports.js",
+    "test:email-validation": "node scripts/test-email-validation.js",
     "test:e2e": "node scripts/e2e-test-suite.js",
     "start": "cd server && npm start",
     "start:fullstack": "./start-fullstack.sh"

@@ -1,6 +1,7 @@
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import enhancedDb from '../services/enhancedDatabase.js';
+import { emailValidation } from '../utils/emailValidation.js';
 
 class User {
   constructor(data = {}) {
@@ -33,10 +34,10 @@ class User {
       throw new Error('Email, password, first name, and last name are required');
     }
 
-    // Validate email format
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
-      throw new Error('Invalid email format');
+    // Validate email format and domain using new email validation
+    const emailValidationResult = emailValidation.validate(email);
+    if (!emailValidationResult.valid) {
+      throw new Error(emailValidationResult.error);
     }
 
     // Validate password strength
@@ -54,9 +55,9 @@ class User {
     const saltRounds = 12;
     const password_hash = await bcrypt.hash(password, saltRounds);
 
-    // Create user record
+    // Create user record with validated email
     const result = await enhancedDb.insert('users', {
-      email: email.toLowerCase(),
+      email: emailValidationResult.value, // Use validated email
       password_hash,
       first_name,
       last_name,
@@ -78,7 +79,9 @@ class User {
 
   // Find user by email
   static async findByEmail(email) {
-    const users = await enhancedDb.select('users', { where: 'email = $1 AND is_active = true', whereParams: [email.toLowerCase()] });
+    // Normalize email for consistent lookup
+    const normalizedEmail = email ? email.toLowerCase() : '';
+    const users = await enhancedDb.select('users', { where: 'email = $1 AND is_active = true', whereParams: [normalizedEmail] });
     if (users.length === 0) return null;
     
     return new User(users[0]);
@@ -104,7 +107,13 @@ class User {
       throw new Error('Email and password are required');
     }
 
-    const user = await User.findByEmail(email);
+    // Validate email format and domain
+    const emailValidationResult = emailValidation.validate(email);
+    if (!emailValidationResult.valid) {
+      throw new Error('Invalid email or password');
+    }
+
+    const user = await User.findByEmail(emailValidationResult.value);
     if (!user) {
       throw new Error('Invalid email or password');
     }
@@ -124,200 +133,114 @@ class User {
   async update(updates) {
     const allowedUpdates = [
       'first_name',
-      'last_name', 
+      'last_name',
       'email',
-      'role',
-      'is_active',
-      'email_verified',
       'settings'
     ];
-    
-    const updateData = {};
-    
-    for (const key of allowedUpdates) {
-      if (updates.hasOwnProperty(key)) {
-        if (key === 'email' && updates[key]) {
-          // Validate email format
-          const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-          if (!emailRegex.test(updates[key])) {
-            throw new Error('Invalid email format');
+
+    const filteredUpdates = {};
+    for (const [key, value] of Object.entries(updates)) {
+      if (allowedUpdates.includes(key)) {
+        // Special validation for email updates
+        if (key === 'email' && value) {
+          const emailValidationResult = emailValidation.validate(value);
+          if (!emailValidationResult.valid) {
+            throw new Error(emailValidationResult.error);
           }
-          updateData[key] = updates[key].toLowerCase();
-        } else if (key === 'settings' && updates[key]) {
-          updateData[key] = JSON.stringify(updates[key]);
+          filteredUpdates[key] = emailValidationResult.value;
         } else {
-          updateData[key] = updates[key];
+          filteredUpdates[key] = value;
         }
       }
     }
 
-    if (Object.keys(updateData).length === 0) {
-      throw new Error('No valid fields to update');
+    if (Object.keys(filteredUpdates).length === 0) {
+      throw new Error('No valid updates provided');
     }
 
-    updateData.updated_at = new Date();
+    filteredUpdates.updated_at = new Date();
 
-    const result = await enhancedDb.update('users', updateData, 'id = $1', [this.id]);
+    const result = await enhancedDb.update('users', filteredUpdates, { where: 'id = $1', whereParams: [this.id] });
     
-    if (result) {
-      // Parse JSON fields for the instance
-      if (result.settings && typeof result.settings === 'string') {
-        try {
-          result.settings = JSON.parse(result.settings);
-        } catch (e) {
-          // Keep original value if parsing fails
-        }
-      }
-      
-      Object.assign(this, result);
-      return this;
-    }
+    // Update local instance
+    Object.assign(this, filteredUpdates);
     
-    throw new Error('User not found');
-  }
-
-  // Change password
-  async changePassword(currentPassword, newPassword) {
-    if (!currentPassword || !newPassword) {
-      throw new Error('Current password and new password are required');
-    }
-
-    // Verify current password
-    const isValid = await bcrypt.compare(currentPassword, this.password_hash);
-    if (!isValid) {
-      throw new Error('Current password is incorrect');
-    }
-
-    // Validate new password strength
-    if (newPassword.length < 8) {
-      throw new Error('New password must be at least 8 characters long');
-    }
-
-    // Hash new password
-    const saltRounds = 12;
-    const password_hash = await bcrypt.hash(newPassword, saltRounds);
-
-    // Update password
-    const result = await enhancedDb.update('users', { 
-      password_hash, 
-      updated_at: new Date() 
-    }, 'id = $1', [this.id]);
-
-    if (result) {
-      this.password_hash = result.password_hash;
-      this.updated_at = result.updated_at;
-      return this;
-    }
-
-    throw new Error('Failed to update password');
+    return this;
   }
 
   // Update last login timestamp
   async updateLastLogin() {
-    const now = new Date();
-    await enhancedDb.update('users', { last_login: now }, 'id = $1', [this.id]);
-    this.last_login = now;
+    await enhancedDb.update('users', { 
+      last_login: new Date() 
+    }, { 
+      where: 'id = $1', 
+      whereParams: [this.id] 
+    });
+    
+    this.last_login = new Date();
   }
 
   // Generate JWT token
-  generateToken(expiresIn = '7d') {
-    const secret = process.env.JWT_SECRET || 'manito-dev-secret-change-in-production';
-    
+  generateToken() {
     const payload = {
       id: this.id,
       email: this.email,
       role: this.role,
-      iat: Math.floor(Date.now() / 1000)
+      iat: Math.floor(Date.now() / 1000),
+      exp: Math.floor(Date.now() / 1000) + (7 * 24 * 60 * 60) // 7 days
     };
 
-    return jwt.sign(payload, secret, { 
-      expiresIn,
-      issuer: 'manito-debug',
-      subject: String(this.id)
-    });
+    return jwt.sign(payload, process.env.JWT_SECRET || 'fallback-secret');
   }
 
-  // Verify JWT token
-  static verifyToken(token) {
-    const secret = process.env.JWT_SECRET || 'manito-dev-secret-change-in-production';
-    
-    try {
-      const decoded = jwt.verify(token, secret, {
-        issuer: 'manito-debug'
-      });
-      return decoded;
-    } catch (error) {
-      throw new Error('Invalid or expired token');
-    }
-  }
-
-  // Create session record
-  async createSession(token, userAgent = null, ipAddress = null) {
-    const tokenHash = await bcrypt.hash(token, 10);
-    const expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + 7); // 7 days from now
-
-    const session = await enhancedDb.insert('sessions', {
+  // Create user session
+  async createSession(token, userAgent, ipAddress) {
+    const sessionData = {
       user_id: this.id,
-      token_hash: tokenHash,
-      expires_at: expiresAt,
+      token_hash: await bcrypt.hash(token, 10),
       user_agent: userAgent,
-      ip_address: ipAddress
-    });
+      ip_address: ipAddress,
+      created_at: new Date(),
+      expires_at: new Date(Date.now() + (7 * 24 * 60 * 60 * 1000)) // 7 days
+    };
 
-    return session;
+    await enhancedDb.insert('user_sessions', sessionData);
   }
 
-  // Get user's active sessions
-  async getSessions() {
-    const sessions = await enhancedDb.select('sessions', {
-      where: 'user_id = $1 AND expires_at > NOW()',
-      whereParams: [this.id],
-      orderBy: 'created_at DESC'
+  // Invalidate user session
+  async invalidateSession(token) {
+    const tokenHash = await bcrypt.hash(token, 10);
+    await enhancedDb.delete('user_sessions', { 
+      where: 'user_id = $1 AND token_hash = $2', 
+      whereParams: [this.id, tokenHash] 
     });
+  }
 
+  // Get user sessions
+  async getSessions() {
+    const sessions = await enhancedDb.select('user_sessions', { 
+      where: 'user_id = $1', 
+      whereParams: [this.id] 
+    });
     return sessions;
   }
 
-  // Revoke session
-  async revokeSession(sessionId) {
-    const result = await enhancedDb.delete('sessions', 'id = $1 AND user_id = $2', [sessionId, this.id]);
-    return result.length > 0;
+  // Check if user has verified email
+  isEmailVerified() {
+    return this.email_verified === true;
   }
 
-  // Revoke all sessions
-  async revokeAllSessions() {
-    const result = await enhancedDb.delete('sessions', 'user_id = $1', [this.id]);
-    return result.length;
-  }
-
-  // Get user's projects
-  async getProjects(limit = 20) {
-    const projects = await enhancedDb.select('projects', {
-      where: 'user_id = $1',
-      whereParams: [this.id],
-      orderBy: 'updated_at DESC',
-      limit: limit
+  // Mark email as verified
+  async verifyEmail() {
+    await enhancedDb.update('users', { 
+      email_verified: true,
+      updated_at: new Date()
+    }, { 
+      where: 'id = $1', 
+      whereParams: [this.id] 
     });
-
-    return projects;
-  }
-
-  // Soft delete user (deactivate)
-  async deactivate() {
-    await this.update({ is_active: false });
-    await this.revokeAllSessions();
-    return this;
-  }
-
-  // Get full name
-  getFullName() {
-    return `${this.first_name} ${this.last_name}`.trim();
-  }
-
-  // Check if user has role
-  hasRole(role) {
-    return this.role === role;
+    
+    this.email_verified = true;
   }
 
   // Check if user is admin
@@ -325,14 +248,44 @@ class User {
     return this.role === 'admin';
   }
 
-  // Serialize for API response (exclude sensitive data)
+  // Check if user is active
+  isActive() {
+    return this.is_active === true;
+  }
+
+  // Deactivate user
+  async deactivate() {
+    await enhancedDb.update('users', { 
+      is_active: false,
+      updated_at: new Date()
+    }, { 
+      where: 'id = $1', 
+      whereParams: [this.id] 
+    });
+    
+    this.is_active = false;
+  }
+
+  // Reactivate user
+  async reactivate() {
+    await enhancedDb.update('users', { 
+      is_active: true,
+      updated_at: new Date()
+    }, { 
+      where: 'id = $1', 
+      whereParams: [this.id] 
+    });
+    
+    this.is_active = true;
+  }
+
+  // Convert to JSON (exclude sensitive data)
   toJSON() {
     return {
       id: this.id,
       email: this.email,
       first_name: this.first_name,
       last_name: this.last_name,
-      full_name: this.getFullName(),
       role: this.role,
       is_active: this.is_active,
       email_verified: this.email_verified,
@@ -343,21 +296,40 @@ class User {
     };
   }
 
-  // Serialize for JWT payload
-  toTokenPayload() {
-    return {
-      id: this.id,
-      email: this.email,
-      role: this.role,
-      full_name: this.getFullName()
-    };
+  // Get user statistics
+  static async getStats() {
+    const stats = await enhancedDb.query(`
+      SELECT 
+        COUNT(*) as total_users,
+        COUNT(CASE WHEN email_verified = true THEN 1 END) as verified_users,
+        COUNT(CASE WHEN is_active = true THEN 1 END) as active_users,
+        COUNT(CASE WHEN last_login > NOW() - INTERVAL '7 days' THEN 1 END) as recent_users
+      FROM users
+    `);
+    
+    return stats.rows[0];
   }
 
-  // Delete user and all associated data
-  async delete() {
-    // This will cascade delete all related data due to foreign key constraints
-    const result = await enhancedDb.delete('users', 'id = $1', [this.id]);
-    return result.length > 0;
+  // Search users
+  static async search(query, limit = 20, offset = 0) {
+    const searchQuery = `
+      SELECT id, email, first_name, last_name, role, is_active, 
+             email_verified, last_login, created_at, updated_at
+      FROM users
+      WHERE is_active = true 
+        AND (
+          email ILIKE $1 
+          OR first_name ILIKE $1 
+          OR last_name ILIKE $1
+        )
+      ORDER BY created_at DESC
+      LIMIT $2 OFFSET $3
+    `;
+    
+    const searchTerm = `%${query}%`;
+    const users = await enhancedDb.query(searchQuery, [searchTerm, limit, offset]);
+    
+    return users.rows.map(user => new User(user));
   }
 }
 

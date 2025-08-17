@@ -31,6 +31,8 @@ services:
       - REDIS_PORT_RANGE_END=6389
       - MONITORING_PORT_RANGE_START=9090
       - MONITORING_PORT_RANGE_END=9099
+      # Email Configuration - Ensures manito.ai emails are accepted
+      - ALLOWED_EMAIL_DOMAINS=manito.ai,manito.com,gmail.com,yahoo.com,outlook.com,hotmail.com
       # Database configuration
       - POSTGRES_USER=manito_prod
       - POSTGRES_PASSWORD=manito_prod_password
@@ -82,15 +84,15 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
     networks:
       - manito-network
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U manito_prod -d manito_prod"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
 
   redis:
     image: redis:7-alpine
@@ -104,9 +106,10 @@ services:
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
 
   prometheus:
     image: prom/prometheus:latest
@@ -131,6 +134,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
+      start_period: 30s
 
   grafana:
     image: grafana/grafana:latest
@@ -141,13 +145,15 @@ services:
       - GF_SECURITY_ADMIN_PASSWORD=admin
     volumes:
       - grafana_data:/var/lib/grafana
-      - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards
-      - ./monitoring/grafana/datasources:/etc/grafana/provisioning/datasources
-    depends_on:
-      - prometheus
     networks:
       - manito-network
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:3000/api/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
 
 volumes:
   postgres_data:

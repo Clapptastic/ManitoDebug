@@ -1,20 +1,23 @@
 import express from 'express';
 import Joi from 'joi';
+import bcrypt from 'bcrypt';
 import User from '../models/User.js';
 import { authenticate, authRateLimit, adminOnly } from '../middleware/auth.js';
+import { emailSchemas, emailValidation } from '../utils/emailValidation.js';
+import enhancedDb from '../services/enhancedDatabase.js';
 
 const router = express.Router();
 
-// Validation schemas
+// Validation schemas using new email validation
 const registerSchema = Joi.object({
-  email: Joi.string().email().required(),
+  email: emailSchemas.registration,
   password: Joi.string().min(8).required(),
   first_name: Joi.string().min(1).max(100).required(),
   last_name: Joi.string().min(1).max(100).required()
 });
 
 const loginSchema = Joi.object({
-  email: Joi.string().email().required(),
+  email: emailSchemas.login,
   password: Joi.string().required()
 });
 
@@ -26,7 +29,7 @@ const changePasswordSchema = Joi.object({
 const updateProfileSchema = Joi.object({
   first_name: Joi.string().min(1).max(100).optional(),
   last_name: Joi.string().min(1).max(100).optional(),
-  email: Joi.string().email().optional(),
+  email: emailSchemas.profileUpdate,
   settings: Joi.object().optional()
 });
 
@@ -124,11 +127,14 @@ router.post('/login', authRateLimit, async (req, res) => {
 // Logout user
 router.post('/logout', authenticate, async (req, res) => {
   try {
+    const token = req.cookies.token || req.headers.authorization?.replace('Bearer ', '');
+    
+    if (token) {
+      await req.user.invalidateSession(token);
+    }
+
     // Clear cookie
     res.clearCookie('token');
-
-    // Revoke session (optional - token will expire anyway)
-    // You could implement session tracking if needed
 
     res.json({
       success: true,
@@ -153,6 +159,7 @@ router.get('/profile', authenticate, async (req, res) => {
         user: req.user.toJSON()
       }
     });
+
   } catch (error) {
     res.status(500).json({
       success: false,
@@ -173,13 +180,13 @@ router.put('/profile', authenticate, async (req, res) => {
       });
     }
 
-    await req.user.update(value);
+    const updatedUser = await req.user.update(value);
 
     res.json({
       success: true,
       message: 'Profile updated successfully',
       data: {
-        user: req.user.toJSON()
+        user: updatedUser.toJSON()
       }
     });
 
@@ -193,7 +200,7 @@ router.put('/profile', authenticate, async (req, res) => {
 });
 
 // Change password
-router.put('/change-password', authenticate, async (req, res) => {
+router.post('/change-password', authenticate, async (req, res) => {
   try {
     const { error, value } = changePasswordSchema.validate(req.body);
     if (error) {
@@ -204,33 +211,34 @@ router.put('/change-password', authenticate, async (req, res) => {
     }
 
     const { current_password, new_password } = value;
-    await req.user.changePassword(current_password, new_password);
 
-    // Revoke all other sessions for security
-    await req.user.revokeAllSessions();
+    // Verify current password
+    const isValid = await bcrypt.compare(current_password, req.user.password_hash);
+    if (!isValid) {
+      return res.status(400).json({
+        success: false,
+        error: 'Current password is incorrect'
+      });
+    }
 
-    // Generate new token
-    const token = req.user.generateToken();
+    // Update password
+    const saltRounds = 12;
+    const password_hash = await bcrypt.hash(new_password, saltRounds);
     
-    // Create new session
-    const userAgent = req.get('User-Agent');
-    const ipAddress = req.ip || req.connection.remoteAddress;
-    await req.user.createSession(token, userAgent, ipAddress);
-
-    // Set new cookie
-    res.cookie('token', token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
-      maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+    await enhancedDb.update('users', { 
+      password_hash,
+      updated_at: new Date()
+    }, { 
+      where: 'id = $1', 
+      whereParams: [req.user.id] 
     });
+
+    // Invalidate all sessions to force re-login
+    await req.user.invalidateSession();
 
     res.json({
       success: true,
-      message: 'Password changed successfully',
-      data: {
-        token
-      }
+      message: 'Password changed successfully. Please log in again.'
     });
 
   } catch (error) {
@@ -246,16 +254,16 @@ router.put('/change-password', authenticate, async (req, res) => {
 router.get('/sessions', authenticate, async (req, res) => {
   try {
     const sessions = await req.user.getSessions();
-
+    
     res.json({
       success: true,
       data: {
         sessions: sessions.map(session => ({
           id: session.id,
-          created_at: session.created_at,
-          last_accessed: session.last_accessed,
           user_agent: session.user_agent,
-          ip_address: session.ip_address
+          ip_address: session.ip_address,
+          created_at: session.created_at,
+          expires_at: session.expires_at
         }))
       }
     });
@@ -273,9 +281,13 @@ router.get('/sessions', authenticate, async (req, res) => {
 router.delete('/sessions/:sessionId', authenticate, async (req, res) => {
   try {
     const { sessionId } = req.params;
-    const revoked = await req.user.revokeSession(sessionId);
+    
+    const result = await enhancedDb.delete('user_sessions', { 
+      where: 'id = $1 AND user_id = $2', 
+      whereParams: [sessionId, req.user.id] 
+    });
 
-    if (!revoked) {
+    if (result.length === 0) {
       return res.status(404).json({
         success: false,
         error: 'Session not found'
@@ -296,138 +308,86 @@ router.delete('/sessions/:sessionId', authenticate, async (req, res) => {
   }
 });
 
-// Revoke all sessions
-router.delete('/sessions', authenticate, async (req, res) => {
+// Get email configuration (admin only)
+router.get('/email-config', adminOnly, async (req, res) => {
   try {
-    const revokedCount = await req.user.revokeAllSessions();
-
-    // Clear current cookie too
-    res.clearCookie('token');
-
-    res.json({
-      success: true,
-      message: `${revokedCount} sessions revoked successfully`
-    });
-
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      error: 'Failed to revoke sessions',
-      message: error.message
-    });
-  }
-});
-
-// Verify token (for client-side validation)
-router.get('/verify', authenticate, async (req, res) => {
-  try {
-    res.json({
-      success: true,
-      data: {
-        valid: true,
-        user: req.user.toJSON()
-      }
-    });
-  } catch (error) {
-    res.status(401).json({
-      success: false,
-      data: {
-        valid: false
-      }
-    });
-  }
-});
-
-// Admin endpoints
-router.get('/users', authenticate, adminOnly, async (req, res) => {
-  try {
-    const limit = parseInt(req.query.limit) || 50;
-    const offset = parseInt(req.query.offset) || 0;
+    const config = emailValidation.getConfig();
     
-    const users = await User.findAll(limit, offset);
-
     res.json({
       success: true,
-      data: {
-        users: users.map(user => user.toJSON()),
-        limit,
-        offset
-      }
+      data: config
     });
 
   } catch (error) {
     res.status(500).json({
       success: false,
-      error: 'Failed to get users',
+      error: 'Failed to get email configuration',
       message: error.message
     });
   }
 });
 
-// Admin: Update user role
-router.put('/users/:userId/role', authenticate, adminOnly, async (req, res) => {
+// Update email configuration (admin only)
+router.put('/email-config', adminOnly, async (req, res) => {
   try {
-    const { userId } = req.params;
-    const { role } = req.body;
-
-    if (!role || !['user', 'admin'].includes(role)) {
+    const { allowedDomains } = req.body;
+    
+    if (!Array.isArray(allowedDomains)) {
       return res.status(400).json({
         success: false,
-        error: 'Invalid role'
+        error: 'allowedDomains must be an array'
       });
     }
 
-    const user = await User.findById(userId);
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        error: 'User not found'
-      });
-    }
-
-    await user.update({ role });
+    // Update environment variable (this would need to be persisted to a config file in production)
+    process.env.ALLOWED_EMAIL_DOMAINS = allowedDomains.join(',');
+    
+    // Reload email configuration
+    emailValidation.loadFromEnvironment();
 
     res.json({
       success: true,
-      message: 'User role updated successfully',
+      message: 'Email configuration updated successfully',
+      data: emailValidation.getConfig()
+    });
+
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: 'Failed to update email configuration',
+      message: error.message
+    });
+  }
+});
+
+// Test email validation
+router.post('/test-email', async (req, res) => {
+  try {
+    const { email } = req.body;
+    
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        error: 'Email is required'
+      });
+    }
+
+    const validation = emailValidation.validate(email);
+    
+    res.json({
+      success: true,
       data: {
-        user: user.toJSON()
+        email,
+        validation,
+        isManitoEmail: emailValidation.isManitoEmail(email),
+        allowedDomains: emailValidation.getAllowedDomains()
       }
     });
 
   } catch (error) {
     res.status(500).json({
       success: false,
-      error: 'Failed to update user role',
-      message: error.message
-    });
-  }
-});
-
-// Admin: Deactivate user
-router.put('/users/:userId/deactivate', authenticate, adminOnly, async (req, res) => {
-  try {
-    const { userId } = req.params;
-
-    const user = await User.findById(userId);
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        error: 'User not found'
-      });
-    }
-
-    await user.deactivate();
-
-    res.json({
-      success: true,
-      message: 'User deactivated successfully'
-    });
-
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      error: 'Failed to deactivate user',
+      error: 'Email validation test failed',
       message: error.message
     });
   }

@@ -107,6 +107,9 @@ CLIENT_PORT_RANGE_END=5180
 WEBSOCKET_PORT_RANGE_START=3001
 WEBSOCKET_PORT_RANGE_END=3010
 
+# Email Configuration - Ensures manito.ai emails are accepted
+ALLOWED_EMAIL_DOMAINS=manito.ai,manito.com,gmail.com,yahoo.com,outlook.com,hotmail.com
+
 # AI Configuration
 OPENAI_API_KEY=your_openai_api_key_here
 ANTHROPIC_API_KEY=your_anthropic_api_key_here

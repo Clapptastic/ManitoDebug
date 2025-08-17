@@ -27,7 +27,7 @@ RUN npm install --ignore-scripts
 # Copy remaining source code
 COPY . .
 
-# Build the client application
+# Build client
 RUN cd client && npm run build
 
 # Production stage
@@ -42,8 +42,13 @@ RUN apk add --no-cache \
     postgresql-client \
     && rm -rf /var/cache/apk/*
 
-# Copy built application from builder stage
-COPY --from=builder /app/package*.json ./
+# Copy package files
+COPY package*.json ./
+COPY client/package*.json ./client/
+COPY server/package*.json ./server/
+COPY core/package*.json ./core/
+
+# Copy built client and server code
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/client/dist ./client/dist
 COPY --from=builder /app/server ./server
@@ -73,8 +78,11 @@ ENV REDIS_PORT_RANGE_END=6389
 ENV MONITORING_PORT_RANGE_START=9090
 ENV MONITORING_PORT_RANGE_END=9099
 
-# Expose dynamic port ranges and standard ports
-EXPOSE 3000-3999 5432-5439 6379-6389 9090-9099 80 443
+# Email Configuration - Ensures manito.ai emails are accepted
+ENV ALLOWED_EMAIL_DOMAINS=manito.ai,manito.com,gmail.com,yahoo.com,outlook.com,hotmail.com
+
+# Expose dynamic port ranges
+EXPOSE 3000-3999 5432-5439 6379-6389 9090-9099
 
 # Health check with dynamic port support
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
