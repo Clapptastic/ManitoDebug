@@ -53,19 +53,31 @@ RUN mkdir -p server/uploads server/logs
 # Set environment variables for production
 ENV NODE_ENV=production
 ENV ENABLE_DYNAMIC_PORTS=true
-ENV PORT_RANGE_START=3000
-ENV PORT_RANGE_END=3010
-ENV CLIENT_PORT_RANGE_START=5173
-ENV CLIENT_PORT_RANGE_END=5180
-ENV WEBSOCKET_PORT_RANGE_START=3001
-ENV WEBSOCKET_PORT_RANGE_END=3010
+ENV PORT_MANAGER_STRATEGY=conservative
+ENV PORT_HEALTH_CHECK_TIMEOUT=5000
+ENV PORT_MAX_RETRIES=5
+ENV PORT_AUTO_REASSIGN=false
 
-# Expose dynamic port ranges
-EXPOSE 3000-3010 80 443
+# Port ranges for dynamic assignment
+ENV SERVER_PORT_RANGE_START=3000
+ENV SERVER_PORT_RANGE_END=3999
+ENV CLIENT_PORT_RANGE_START=3000
+ENV CLIENT_PORT_RANGE_END=3999
+ENV DATABASE_PORT_RANGE_START=5432
+ENV DATABASE_PORT_RANGE_END=5439
+ENV REDIS_PORT_RANGE_START=6379
+ENV REDIS_PORT_RANGE_END=6389
+ENV MONITORING_PORT_RANGE_START=9090
+ENV MONITORING_PORT_RANGE_END=9099
 
-# Health check
+# Expose dynamic port ranges and standard ports
+EXPOSE 3000-3999 5432-5439 6379-6389 9090-9099 80 443
+
+# Health check with dynamic port support
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:3000/api/health || exit 1
+    CMD curl -f http://localhost:3000/api/health || \
+        curl -f http://localhost:3001/api/health || \
+        curl -f http://localhost:3002/api/health || exit 1
 
 # Production startup script
 COPY scripts/start-prod.sh /usr/local/bin/start-prod.sh

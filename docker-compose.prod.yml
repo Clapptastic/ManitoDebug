@@ -7,18 +7,31 @@ services:
       dockerfile: Dockerfile.prod
     container_name: manito-debug-prod
     ports:
-      - "3000-3010:3000-3010"
+      - "3000-3999:3000-3999"
+      - "5432-5439:5432-5439"
+      - "6379-6389:6379-6389"
+      - "9090-9099:9090-9099"
       - "80:80"
       - "443:443"
     environment:
       - NODE_ENV=production
       - ENABLE_DYNAMIC_PORTS=true
-      - PORT_RANGE_START=3000
-      - PORT_RANGE_END=3010
-      - CLIENT_PORT_RANGE_START=5173
-      - CLIENT_PORT_RANGE_END=5180
-      - WEBSOCKET_PORT_RANGE_START=3001
-      - WEBSOCKET_PORT_RANGE_END=3010
+      - PORT_MANAGER_STRATEGY=conservative
+      - PORT_HEALTH_CHECK_TIMEOUT=5000
+      - PORT_MAX_RETRIES=5
+      - PORT_AUTO_REASSIGN=false
+      # Port ranges for dynamic assignment
+      - SERVER_PORT_RANGE_START=3000
+      - SERVER_PORT_RANGE_END=3999
+      - CLIENT_PORT_RANGE_START=3000
+      - CLIENT_PORT_RANGE_END=3999
+      - DATABASE_PORT_RANGE_START=5432
+      - DATABASE_PORT_RANGE_END=5439
+      - REDIS_PORT_RANGE_START=6379
+      - REDIS_PORT_RANGE_END=6389
+      - MONITORING_PORT_RANGE_START=9090
+      - MONITORING_PORT_RANGE_END=9099
+      # Database configuration
       - POSTGRES_USER=manito_prod
       - POSTGRES_PASSWORD=manito_prod_password
       - POSTGRES_HOST=postgres
@@ -31,6 +44,12 @@ services:
     networks:
       - manito-network
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health", "||", "curl", "-f", "http://localhost:3001/api/health", "||", "curl", "-f", "http://localhost:3002/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
 
   nginx:
     image: nginx:alpine
@@ -46,6 +65,11 @@ services:
     networks:
       - manito-network
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "nginx", "-t"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
   postgres:
     image: postgres:15-alpine
@@ -62,6 +86,11 @@ services:
     networks:
       - manito-network
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U manito_prod -d manito_prod"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   redis:
     image: redis:7-alpine
@@ -73,6 +102,11 @@ services:
     networks:
       - manito-network
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   prometheus:
     image: prom/prometheus:latest
@@ -92,6 +126,11 @@ services:
     networks:
       - manito-network
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9090/-/healthy"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
   grafana:
     image: grafana/grafana:latest
