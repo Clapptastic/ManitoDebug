@@ -1,11 +1,23 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
-// Dynamic port configuration
+// Dynamic port configuration using environment variables
 const getPortConfig = () => {
-  // Try to get from environment variables first
-  const serverPort = process.env.VITE_SERVER_PORT || process.env.SERVER_PORT || 3000;
-  const clientPort = process.env.VITE_CLIENT_PORT || process.env.CLIENT_PORT || 5173;
+  // Use dynamic port manager environment variables
+  const serverPort = process.env.SERVER_PORT || process.env.PORT || 3000;
+  const clientPort = process.env.CLIENT_PORT || 5173;
+  
+  // If dynamic ports are enabled, use the configured ranges
+  if (process.env.ENABLE_DYNAMIC_PORTS === 'true') {
+    const clientRangeStart = process.env.CLIENT_PORT_RANGE_START || 3000;
+    const clientRangeEnd = process.env.CLIENT_PORT_RANGE_END || 3999;
+    
+    // Use the first available port in the range
+    return {
+      server: parseInt(serverPort),
+      client: parseInt(clientRangeStart)
+    };
+  }
   
   return {
     server: parseInt(serverPort),

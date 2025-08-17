@@ -21,6 +21,7 @@
     "test:server": "cd server && npm test",
     "test:dynamic-ports": "node scripts/test-dynamic-port-management.js",
     "test:dynamic-port-manager": "node scripts/test-dynamic-port-manager.js",
+    "test:fullstack-dynamic-ports": "node scripts/test-fullstack-dynamic-ports.js",
     "test:e2e": "node scripts/e2e-test-suite.js",
     "start": "cd server && npm start",
     "install:all": "npm install && cd client && npm install && cd ../server && npm install && cd ../core && npm install",
