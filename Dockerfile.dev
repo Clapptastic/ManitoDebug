@@ -18,11 +18,11 @@ COPY client/package*.json ./client/
 COPY server/package*.json ./server/
 COPY core/package*.json ./core/
 
+# Copy source code first
+COPY . .
+
 # Install dependencies
 RUN npm run install:all
-
-# Copy source code
-COPY . .
 
 # Create necessary directories
 RUN mkdir -p server/uploads server/logs client/dist scripts/test-upload
