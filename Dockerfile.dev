@@ -12,17 +12,17 @@ RUN apk add --no-cache \
     postgresql-client \
     && rm -rf /var/cache/apk/*
 
-# Copy package files
+# Copy package files first for better caching
 COPY package*.json ./
 COPY client/package*.json ./client/
 COPY server/package*.json ./server/
 COPY core/package*.json ./core/
 
-# Copy source code first
-COPY . .
+# Install dependencies using npm workspaces (skip all scripts to avoid issues)
+RUN npm install --ignore-scripts
 
-# Install dependencies
-RUN npm run install:all
+# Copy remaining source code
+COPY . .
 
 # Create necessary directories
 RUN mkdir -p server/uploads server/logs client/dist scripts/test-upload

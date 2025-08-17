@@ -53,13 +53,10 @@ class FullStackSetupEnsurer {
     }
 
     if (needsInstall) {
-      this.log('Installing missing dependencies...');
+      this.log('Installing missing dependencies using npm workspaces...');
       
-      // Install root dependencies
+      // Use npm workspaces to install all dependencies at once
       await this.runCommand('npm install');
-      
-      // Install workspace dependencies
-      await this.runCommand('npm run install:all');
       
       this.log('✅ All dependencies installed');
     }
